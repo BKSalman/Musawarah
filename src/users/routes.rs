@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use axum::{extract::Path, Extension, Json};
 use sqlx::PgPool;
+use uuid::Uuid;
 
 use super::{
     models::{CreateUser, UserReponse},
@@ -15,6 +16,8 @@ pub async fn create_user(
     if payload.username.is_empty() || payload.password.is_empty() || payload.email.is_empty() {
         return Err(UsersError::Bad);
     };
+    // v7 uuid allows for easier sorting
+    let uuid = Uuid::now_v7();
 
     let id = sqlx::query!(
         r#"

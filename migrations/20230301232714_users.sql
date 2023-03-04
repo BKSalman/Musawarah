@@ -1,6 +1,6 @@
 -- Add migration script here
 CREATE TABLE IF NOT EXISTS users (
-    id uuid PRIMARY KEY NOT NULL DEFAULT uuid_generate_v4(),
+    id uuid PRIMARY KEY NOT NULL,
     username VARCHAR ( 150 ) UNIQUE NOT NULL,
     displayname varchar (150) NOT NULL,
     password VARCHAR ( 150 ) NOT NULL,
