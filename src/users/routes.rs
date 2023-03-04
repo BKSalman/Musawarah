@@ -1,72 +1,188 @@
 use std::collections::HashMap;
 
-use axum::{extract::Path, Extension, Json};
+use argon2::{
+    password_hash::{PasswordHasher, PasswordVerifier, SaltString},
+    Argon2, PasswordHash,
+};
+use axum::{
+    extract::{Path, State},
+    Json,
+};
+use jwt_simple::prelude::*;
+use serde_json::{json, Value};
 use sqlx::PgPool;
 use uuid::Uuid;
+use validator::Validate;
+
+use crate::{posts::models::PostResponse, JWT_KEY};
 
 use super::{
-    models::{CreateUser, UserReponse},
+    models::{CreateUser, UserClaims, UserLogin, UserReponse},
     UsersError,
 };
 
 pub async fn create_user(
-    db: Extension<PgPool>,
+    State(db): State<PgPool>,
     Json(payload): Json<CreateUser>,
-) -> Result<Json<UserReponse>, UsersError> {
+) -> Result<Json<Value>, UsersError> {
+    payload.validate()?;
+
     if payload.username.is_empty() || payload.password.is_empty() || payload.email.is_empty() {
-        return Err(UsersError::Bad);
-    };
+        return Err(UsersError::BadRequest);
+    }
+
     // v7 uuid allows for easier sorting
     let uuid = Uuid::now_v7();
 
-    let id = sqlx::query!(
+    let salt = SaltString::new("somethingsomething").expect("salt");
+
+    // argon2 is a good algorithm (not a security expert :))
+    let argon2 = Argon2::default();
+
+    let hashed_password = argon2
+        .hash_password(payload.password.as_bytes(), &salt)?
+        .to_string();
+
+    let _id = sqlx::query!(
         r#"
-    INSERT INTO users ( username, displayname, email, password )
-    VALUES ( $1, $2, $3, $4 )
-    RETURNING id
+INSERT INTO users ( id, username, displayname, email, password )
+VALUES ( $1, $2, $3, $4 , $5)
+RETURNING id
             "#,
+        uuid,
         payload.username.to_lowercase(),
         payload.username,
         payload.email,
-        payload.password,
+        hashed_password,
     )
-    .fetch_one(&*db)
+    .fetch_one(&db)
     .await
-    // TODO: better error handling
-    .map_err(|_| UsersError::FailedInsert)?
+    .map_err(|e| match e {
+        sqlx::Error::Database(dbe) => match dbe.constraint() {
+            Some("users_username_key") => UsersError::Conflict("username taken".into()),
+            Some("users_email_key") => UsersError::Conflict("email taken".into()),
+            _ => UsersError::InternalServerError,
+        },
+        _ => {
+            // TODO: log this instead of printing
+            println!("{e:#?}");
+            UsersError::InternalServerError
+        }
+    })?
     .id;
 
-    let user = UserReponse {
-        id: id.to_string(),
-        username: payload.username.to_lowercase(),
-    };
+    // let user = UserReponse {
+    //     id: id.to_string(),
+    //     username: payload.username.to_lowercase(),
+    // };
 
-    Ok(Json(user))
+    Ok(Json(json!({"message": "registered successfully"})))
 }
 
-pub async fn get_user(
-    Path(params): Path<HashMap<String, String>>,
-    db: Extension<PgPool>,
-) -> Result<Json<UserReponse>, UsersError> {
-    let Some(username) = params.get("username") else {
-        return Err(UsersError::MissingUsernameParam)
+pub async fn login(
+    State(db): State<PgPool>,
+    Json(payload): Json<UserLogin>,
+) -> Result<Json<Value>, UsersError> {
+    // argon2 is a good algorithm (not a security expert :))
+    let argon2 = Argon2::default();
+
+    let record = sqlx::query!(
+        r#"
+SELECT users.*
+FROM users
+WHERE email = $1;
+        "#,
+        payload.email,
+    )
+    .fetch_optional(&db)
+    .await
+    // TODO: better error handling
+    .map_err(|error| match error {
+        _ => UsersError::InternalServerError,
+    })?;
+
+    let Some(user) = record else {
+        return Err(UsersError::UserNotFound);
     };
 
-    let user = sqlx::query!(
+    let parsed_password = PasswordHash::new(&user.password)?;
+
+    if argon2
+        .verify_password(payload.password.as_bytes(), &parsed_password)
+        .is_err()
+    {
+        return Err(UsersError::WrongPassword);
+    }
+
+    let claims = Claims::with_custom_claims(
+        json!({
+            "user": UserReponse {
+                id: user.id.to_string(),
+                username: user.username,
+                email: user.email,
+            },
+        }),
+        Duration::from_mins(20),
+    );
+
+    let token = JWT_KEY.authenticate(claims)?;
+
+    Ok(Json(json!({
+        "access_token": token,
+        "type": "Bearer",
+    })))
+}
+
+pub async fn get_user_posts(
+    Path(params): Path<HashMap<String, String>>,
+    State(db): State<PgPool>,
+) -> Result<Json<Value>, UsersError> {
+    let Some(username) = params.get("username") else {
+        return Err(UsersError::BadRequest)
+    };
+
+    let records = sqlx::query!(
         r#"
-SELECT * FROM users WHERE username = $1
+SELECT users.id AS user_id, posts.id AS posts_id,
+users.displayname, users.username, users.email,
+posts.content
+
+FROM posts
+INNER JOIN users
+ON users.id = posts.author_id
+WHERE username = $1;
         "#,
         username
     )
-    .fetch_one(&*db)
+    .fetch_all(&db)
     .await
     // TODO: better error handling
     .map_err(|_| UsersError::UserNotFound)?;
 
-    let user = UserReponse {
-        id: user.id.to_string(),
-        username: user.username,
+    let Some(first) = records.iter().next() else {
+        return Err(UsersError::UserNotFound)
     };
 
-    Ok(Json(user))
+    let user = UserReponse {
+        id: first.user_id.to_string(),
+        username: first.username.clone(),
+        email: first.email.clone(),
+    };
+
+    let posts = records
+        .iter()
+        .map(|r| PostResponse {
+            content: r.content.clone(),
+        })
+        .collect::<Vec<PostResponse>>();
+
+    Ok(Json(json!({
+        "user": user,
+        "posts": posts,
+    })))
+}
+
+/// get user details for profile
+pub async fn get_user(claims: UserClaims) -> Result<Json<UserClaims>, UsersError> {
+    Ok(Json(claims))
 }

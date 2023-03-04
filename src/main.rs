@@ -1,8 +1,13 @@
 use axum::{
     routing::{get, post},
-    Extension, Router,
+    Router,
 };
-use rmusawarah::users::routes::{create_user, get_user};
+use jwt_simple::prelude::HS256Key;
+use once_cell::sync::Lazy;
+use rmusawarah::{
+    users::routes::{create_user, get_user, get_user_posts, login},
+    AppState,
+};
 use sqlx::postgres::PgPoolOptions;
 use std::net::SocketAddr;
 
@@ -16,14 +21,18 @@ async fn main() {
         .await
         .expect("db connection");
 
+    let app_state = AppState { db: pool };
+
     let user_router = Router::new()
         .route("/", post(create_user))
-        .route("/:username", get(get_user))
-        .layer(Extension(pool));
+        .route("/login", post(login))
+        .route("/:username", get(get_user_posts))
+        .route("/", get(get_user));
 
     let app = Router::new()
         .route("/", get(root))
-        .nest("/api/users", user_router);
+        .nest("/api/users", user_router)
+        .with_state(app_state);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 6060));
 
