@@ -28,5 +28,5 @@ pub struct UserReponse {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct UserClaims {
-    user: UserReponse,
+    pub user: UserReponse,
 }

@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use argon2::{
     password_hash::{PasswordHasher, PasswordVerifier, SaltString},
     Argon2, PasswordHash,
@@ -14,7 +12,10 @@ use sqlx::PgPool;
 use uuid::Uuid;
 use validator::Validate;
 
-use crate::{posts::models::PostResponse, JWT_KEY};
+use crate::{
+    posts::models::{ImageResponse, PostResponse},
+    JWT_KEY,
+};
 
 use super::{
     models::{CreateUser, UserClaims, UserLogin, UserReponse},
@@ -115,13 +116,13 @@ WHERE email = $1;
     }
 
     let claims = Claims::with_custom_claims(
-        json!({
-            "user": UserReponse {
+        UserClaims {
+            user: UserReponse {
                 id: user.id.to_string(),
                 username: user.username,
                 email: user.email,
             },
-        }),
+        },
         Duration::from_mins(20),
     );
 
@@ -134,22 +135,24 @@ WHERE email = $1;
 }
 
 pub async fn get_user_posts(
-    Path(params): Path<HashMap<String, String>>,
+    // prevent non logged users from
+    // accessing a specific user's posts
+    _: UserClaims,
     State(db): State<PgPool>,
-) -> Result<Json<Value>, UsersError> {
-    let Some(username) = params.get("username") else {
-        return Err(UsersError::BadRequest)
-    };
-
+    Path(username): Path<String>,
+) -> Result<Json<Vec<PostResponse>>, UsersError> {
     let records = sqlx::query!(
         r#"
-SELECT users.id AS user_id, posts.id AS posts_id,
+SELECT users.id AS user_id, posts.id AS post_id,
 users.displayname, users.username, users.email,
-posts.content
+posts.content, posts.title, posts.created_at,
+images.path, images.content_type, images.id AS image_id
 
 FROM posts
 INNER JOIN users
 ON users.id = posts.author_id
+INNER JOIN images
+ON posts.id = images.post_id
 WHERE username = $1;
         "#,
         username
@@ -159,27 +162,26 @@ WHERE username = $1;
     // TODO: better error handling
     .map_err(|_| UsersError::UserNotFound)?;
 
-    let Some(first) = records.iter().next() else {
-        return Err(UsersError::UserNotFound)
-    };
-
-    let user = UserReponse {
-        id: first.user_id.to_string(),
-        username: first.username.clone(),
-        email: first.email.clone(),
-    };
-
     let posts = records
-        .iter()
+        .into_iter()
         .map(|r| PostResponse {
-            content: r.content.clone(),
+            id: r.post_id.to_string(),
+            title: r.title,
+            content: r.content,
+            created_at: r.created_at.to_string(),
+            user: UserReponse {
+                id: r.user_id.to_string(),
+                username: r.username,
+                email: r.email,
+            },
+            image: ImageResponse {
+                content_type: r.content_type,
+                path: r.path,
+            },
         })
         .collect::<Vec<PostResponse>>();
 
-    Ok(Json(json!({
-        "user": user,
-        "posts": posts,
-    })))
+    Ok(Json(posts))
 }
 
 /// get user details for profile
