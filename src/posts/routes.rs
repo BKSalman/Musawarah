@@ -175,10 +175,8 @@ RETURNING id
 pub async fn get_post(
     // State(storage): State<Storage>,
     State(db): State<PgPool>,
-    Path(post_id): Path<String>,
+    Path(post_id): Path<Uuid>,
 ) -> Result<Json<PostResponse>, PostsError> {
-    let uuid = Uuid::parse_str(&post_id).map_err(|_| PostsError::InternalServerError)?;
-
     let Some(record) = sqlx::query!(
         r#"
 SELECT images.id AS image_id, posts.id AS post_id, users.id AS user_id, images.content_type,
@@ -192,7 +190,7 @@ INNER JOIN users
 ON posts.author_id = users.id
 WHERE posts.id = $1
         "#,
-        uuid
+        post_id
     )
     .fetch_optional(&db)
     // TODO: map this error
@@ -219,11 +217,11 @@ WHERE posts.id = $1
     Ok(Json(post))
 }
 
-pub async fn get_posts(
+pub async fn get_posts_cursor(
     State(db): State<PgPool>,
-    Path(cursor): Path<String>,
+    Path(cursor): Path<Uuid>,
 ) -> Result<Json<Vec<PostResponse>>, PostsError> {
-    let uuid = Uuid::parse_str(&cursor).map_err(|_| PostsError::InternalServerError)?;
+    tracing::debug!("cursor: {}", cursor);
     let records = sqlx::query!(
         r#"
 SELECT images.id AS image_id, posts.id AS post_id, users.id AS user_id, images.content_type,
@@ -241,7 +239,51 @@ ORDER BY posts.id
 
 LIMIT 10
         "#,
-        uuid
+        cursor
+    )
+    .fetch_all(&db)
+    // TODO: map this error
+    .await?;
+
+    let posts = records
+        .into_iter()
+        .map(|r| PostResponse {
+            id: r.post_id.to_string(),
+            title: r.title,
+            content: r.content,
+            created_at: r.created_at.to_string(),
+            user: UserReponse {
+                id: r.user_id.to_string(),
+                username: r.username,
+                email: r.email,
+            },
+            image: ImageResponse {
+                content_type: r.content_type,
+                path: r.path,
+            },
+        })
+        .collect::<Vec<PostResponse>>();
+
+    Ok(Json(posts))
+}
+
+pub async fn get_posts(State(db): State<PgPool>) -> Result<Json<Vec<PostResponse>>, PostsError> {
+    let records = sqlx::query!(
+        r#"
+SELECT images.id AS image_id, posts.id AS post_id, users.id AS user_id, images.content_type,
+images.path, posts.title, posts.content, posts.created_at,
+users.username, users.email
+
+FROM posts
+INNER JOIN images
+ON posts.id = images.post_id
+INNER JOIN users
+ON posts.author_id = users.id
+
+ORDER BY posts.id
+
+LIMIT 10
+        "#,
     )
     .fetch_all(&db)
     // TODO: map this error

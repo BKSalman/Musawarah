@@ -3,7 +3,7 @@ use axum::{
     Router,
 };
 use rmusawarah::{
-    posts::routes::{create_post, get_post, get_posts},
+    posts::routes::{create_post, get_post, get_posts, get_posts_cursor},
     s3::helpers::setup_storage,
     users::routes::{create_user, get_user, get_user_posts, login},
     AppState,
@@ -42,7 +42,8 @@ async fn main() {
     let posts_router = Router::new()
         .route("/", post(create_post))
         .route("/:post_id", get(get_post))
-        .route("/cursor/:cursor", get(get_posts));
+        .route("/pagination", get(get_posts))
+        .route("/pagination/:cursor", get(get_posts_cursor));
 
     let app = Router::new()
         .route("/", get(root))

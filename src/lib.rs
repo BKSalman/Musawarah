@@ -8,7 +8,6 @@ pub mod middlewares;
 pub mod posts;
 pub mod s3;
 pub mod users;
-pub mod utils;
 
 #[derive(Clone, FromRef)]
 pub struct AppState {
