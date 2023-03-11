@@ -1,10 +1,11 @@
 use std::io::SeekFrom;
 
 use axum::{
-    extract::{Multipart, Path, State},
+    extract::{Multipart, Path, Query, State},
     Json,
 };
 use futures::TryStreamExt;
+use serde::Deserialize;
 use serde_json::{json, Value};
 use sqlx::PgPool;
 use tempfile::tempfile;
@@ -173,7 +174,6 @@ RETURNING id
 }
 
 pub async fn get_post(
-    // State(storage): State<Storage>,
     State(db): State<PgPool>,
     Path(post_id): Path<Uuid>,
 ) -> Result<Json<PostResponse>, PostsError> {
@@ -217,57 +217,19 @@ WHERE posts.id = $1
     Ok(Json(post))
 }
 
-pub async fn get_posts_cursor(
-    State(db): State<PgPool>,
-    Path(cursor): Path<Uuid>,
-) -> Result<Json<Vec<PostResponse>>, PostsError> {
-    tracing::debug!("cursor: {}", cursor);
-    let records = sqlx::query!(
-        r#"
-SELECT images.id AS image_id, posts.id AS post_id, users.id AS user_id, images.content_type,
-images.path, posts.title, posts.content, posts.created_at,
-users.username, users.email
-
-FROM posts
-INNER JOIN images
-ON posts.id = images.post_id
-INNER JOIN users
-ON posts.author_id = users.id
-
-WHERE posts.id < $1
-ORDER BY posts.id
-
-LIMIT 10
-        "#,
-        cursor
-    )
-    .fetch_all(&db)
-    // TODO: map this error
-    .await?;
-
-    let posts = records
-        .into_iter()
-        .map(|r| PostResponse {
-            id: r.post_id.to_string(),
-            title: r.title,
-            content: r.content,
-            created_at: r.created_at.to_string(),
-            user: UserReponse {
-                id: r.user_id.to_string(),
-                username: r.username,
-                email: r.email,
-            },
-            image: ImageResponse {
-                content_type: r.content_type,
-                path: r.path,
-            },
-        })
-        .collect::<Vec<PostResponse>>();
-
-    Ok(Json(posts))
+#[derive(Debug, Deserialize)]
+pub struct PaginationParams {
+    #[serde(default = "Uuid::nil")]
+    min_id: Uuid,
+    #[serde(default = "Uuid::max")]
+    max_id: Uuid,
 }
 
-pub async fn get_posts(State(db): State<PgPool>) -> Result<Json<Vec<PostResponse>>, PostsError> {
+pub async fn get_posts_cursor(
+    State(db): State<PgPool>,
+    Query(pagination): Query<PaginationParams>,
+) -> Result<Json<Vec<PostResponse>>, PostsError> {
+    tracing::debug!("cursor: {:#?}", pagination);
     let records = sqlx::query!(
         r#"
 SELECT images.id AS image_id, posts.id AS post_id, users.id AS user_id, images.content_type,
@@ -280,15 +242,19 @@ ON posts.id = images.post_id
 INNER JOIN users
 ON posts.author_id = users.id
 
-ORDER BY posts.id
+WHERE posts.id > $1 AND posts.id < $2
+ORDER BY posts.id DESC
 
 LIMIT 10
         "#,
+        pagination.min_id,
+        pagination.max_id,
     )
     .fetch_all(&db)
     // TODO: map this error
     .await?;
 
+    // first element in the vector is the newest
     let posts = records
         .into_iter()
         .map(|r| PostResponse {
