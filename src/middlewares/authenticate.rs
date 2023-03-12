@@ -7,9 +7,8 @@ use axum::{
     Json, RequestPartsExt, TypedHeader,
 };
 use jwt_simple::prelude::*;
-use serde_json::json;
 
-use crate::{users::models::UserClaims, JWT_KEY};
+use crate::{users::models::UserClaims, ErrorHandlingResponse, JWT_KEY};
 
 #[derive(thiserror::Error, Debug)]
 pub enum AuthError {
@@ -22,9 +21,9 @@ impl IntoResponse for AuthError {
         let (status, error_message) = match self {
             AuthError::InvalidToken => (
                 StatusCode::UNAUTHORIZED,
-                json!({
-                    "errors": [self.to_string()]
-                }),
+                ErrorHandlingResponse {
+                    errors: vec![self.to_string()],
+                },
             ),
         };
 

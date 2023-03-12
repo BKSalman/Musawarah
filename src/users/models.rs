@@ -1,4 +1,6 @@
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
+use uuid::Uuid;
 use validator::Validate;
 
 #[derive(Validate, Deserialize)]
@@ -19,14 +21,20 @@ pub struct UserLogin {
     pub password: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct UserReponse {
-    pub id: String,
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct UserResponse {
+    pub id: Uuid,
     pub username: String,
     pub email: String,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, ToSchema)]
 pub struct UserClaims {
-    pub user: UserReponse,
+    pub user: UserResponse,
+}
+
+#[derive(Debug, Deserialize, Serialize, ToSchema)]
+pub struct UserToken {
+    pub access_token: String,
+    pub r#type: String,
 }

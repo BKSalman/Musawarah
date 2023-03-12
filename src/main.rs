@@ -1,4 +1,5 @@
 use axum::{
+    extract::DefaultBodyLimit,
     routing::{get, post},
     Router,
 };
@@ -6,14 +7,16 @@ use rmusawarah::{
     posts::routes::{create_post, get_post, get_posts_cursor},
     s3::helpers::setup_storage,
     users::routes::{create_user, get_user, get_user_posts, login},
-    AppState,
+    ApiDoc, AppState,
 };
 use sqlx::postgres::PgPoolOptions;
 use std::net::SocketAddr;
-use tower_http::trace::TraceLayer;
+use tower_http::{limit::RequestBodyLimitLayer, trace::TraceLayer};
 use tracing_subscriber::{
     prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt, EnvFilter,
 };
+use utoipa::OpenApi;
+use utoipa_swagger_ui::SwaggerUi;
 
 #[tokio::main]
 async fn main() {
@@ -41,10 +44,14 @@ async fn main() {
 
     let posts_router = Router::new()
         .route("/", post(create_post))
+        .layer(DefaultBodyLimit::disable())
+        // TODO: image compression
+        .layer(RequestBodyLimitLayer::new(5 * 1024 * 1024 /* 5mb */))
         .route("/", get(get_posts_cursor))
         .route("/:post_id", get(get_post));
 
     let app = Router::new()
+        .merge(SwaggerUi::new("/swagger-ui").url("/api-doc/openapi.json", ApiDoc::openapi()))
         .route("/", get(root))
         .nest("/api/users", user_router)
         .nest("/api/posts", posts_router)
@@ -62,5 +69,5 @@ async fn main() {
 }
 
 async fn root() -> &'static str {
-    "Hello, World!"
+    "xqcL"
 }

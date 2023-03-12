@@ -16,6 +16,9 @@ pub enum PostsError {
     #[error("bad request")]
     BadRequest,
 
+    #[error("image size too large, maximum image size is 5MB")]
+    ImageTooLarge,
+
     #[error("jwt internal server error")]
     JWT(#[from] jwt_simple::Error),
 
@@ -31,13 +34,17 @@ pub enum PostsError {
 
 impl IntoResponse for PostsError {
     fn into_response(self) -> axum::response::Response {
-        println!("{}", self.to_string());
+        tracing::debug!("{}", self.to_string());
 
         let (status, error_message) = match self {
             PostsError::PostNotFound => {
                 (StatusCode::NOT_FOUND, json!({"errors": [self.to_string()]}))
             }
             PostsError::BadRequest => (
+                StatusCode::BAD_REQUEST,
+                json!({"errors": [self.to_string()]}),
+            ),
+            PostsError::ImageTooLarge => (
                 StatusCode::BAD_REQUEST,
                 json!({"errors": [self.to_string()]}),
             ),

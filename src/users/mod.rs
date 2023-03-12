@@ -37,7 +37,7 @@ pub enum UsersError {
 
 impl IntoResponse for UsersError {
     fn into_response(self) -> axum::response::Response {
-        println!("{}", self.to_string());
+        tracing::debug!("{}", self.to_string());
 
         let (status, error_message) = match self {
             UsersError::UserNotFound => {

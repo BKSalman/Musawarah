@@ -5,8 +5,6 @@ use axum::{
     Json,
 };
 use futures::TryStreamExt;
-use serde::Deserialize;
-use serde_json::{json, Value};
 use sqlx::PgPool;
 use tempfile::tempfile;
 use tokio::{
@@ -18,51 +16,61 @@ use uuid::Uuid;
 
 use crate::{
     s3::{interface::Storage, Upload},
-    users::models::{UserClaims, UserReponse},
+    users::models::{UserClaims, UserResponse},
+    PaginationParams,
 };
 
 use super::{
-    models::{CreatePost, ImageResponse, PostResponse},
+    models::{ImageResponse, PostData, PostResponse},
     utils::box_error,
     PostsError,
 };
 
 const ALLOWED_MIME_TYPES: [&str; 3] = ["image/jpeg", "image/jpg", "image/png"];
 
+/// Create Post
+#[utoipa::path(
+    post,
+    path = "/api/posts/",
+    request_body(content = CreatePost, description = "something something", content_type = "multipart/form-data"),
+    responses(
+        (status = 200, description = "Create new post", body = PostResponse),
+        (status = StatusCode::UNAUTHORIZED, description = "Caller unauthorized", body = ErrorHandlingResponse )
+    ),
+    security(
+        ("api_key" = [])
+    ),
+    tag = "Posts API"
+)]
 pub async fn create_post(
     user_claims: UserClaims,
     State(storage): State<Storage>,
     State(db): State<PgPool>,
     mut fields: Multipart,
-) -> Result<Json<Value>, PostsError> {
-    let mut post = CreatePost::builder();
+) -> Result<Json<PostResponse>, PostsError> {
+    let mut post = PostData::builder();
     let mut upload = Upload::builder();
     let mut content_length: i64 = 0;
 
-    while let Some(mut field) = fields
-        .next_field()
-        .await
-        .map_err(|_| PostsError::InternalServerError)?
-    {
+    while let Some(mut field) = fields.next_field().await.map_err(|err| {
+        tracing::debug!("create_post mutipart error: {:#?}", err);
+        PostsError::InternalServerError
+    })? {
         if let Some(field_name) = field.name() {
             match field_name {
                 "title" => {
                     tracing::debug!("adding title");
-                    post = post.title(
-                        field
-                            .text()
-                            .await
-                            .map_err(|_| PostsError::InternalServerError)?,
-                    )
+                    post = post.title(field.text().await.map_err(|err| {
+                        tracing::debug!("title field error: {:#?}", err);
+                        PostsError::InternalServerError
+                    })?)
                 }
                 "content" => {
                     tracing::debug!("adding content");
-                    post = post.content(
-                        field
-                            .text()
-                            .await
-                            .map_err(|_| PostsError::InternalServerError)?,
-                    )
+                    post = post.content(field.text().await.map_err(|err| {
+                        tracing::debug!("title field error: {:#?}", err);
+                        PostsError::InternalServerError
+                    })?)
                 }
                 "image" => {
                     tracing::debug!("adding image");
@@ -77,13 +85,13 @@ pub async fn create_post(
                     let temp_file = tempfile().expect("temp file");
                     let mut temp_file = File::from_std(temp_file);
 
-                    while let Some(chunk) = field
-                        .chunk()
-                        .await
-                        .map_err(|_| PostsError::InternalServerError)?
-                    {
+                    while let Some(chunk) = field.chunk().await.map_err(|err| {
+                        tracing::debug!("image field chunk error: {:#?}", err);
+                        PostsError::BadRequest
+                    })? {
                         content_length += chunk.len() as i64;
-                        if let Err(_err) = temp_file.write_all(&chunk).await {
+                        if let Err(err) = temp_file.write_all(&chunk).await {
+                            tracing::debug!("tempfile write error: {:#?}", err);
                             return Err(PostsError::InternalServerError);
                         }
                     }
@@ -94,14 +102,17 @@ pub async fn create_post(
 
                     upload = upload
                         .path(s3_file_name)
-                        .stream(
-                            ReaderStream::new(temp_file)
-                                .map_err(|_| box_error(PostsError::InternalServerError)),
-                        )
+                        .stream(ReaderStream::new(temp_file).map_err(|err| {
+                            tracing::debug!("tempfile stream error: {:#?}", err);
+                            box_error(PostsError::InternalServerError)
+                        }))
                         .content_type(
                             field
                                 .content_type()
-                                .ok_or(PostsError::InternalServerError)?
+                                .ok_or_else(|| {
+                                    tracing::debug!("image field no content_type");
+                                    PostsError::InternalServerError
+                                })?
                                 .to_string(),
                         );
                 }
@@ -116,41 +127,38 @@ pub async fn create_post(
 
     let mut transaction = db.begin().await?;
 
-    let user_id =
-        Uuid::parse_str(&user_claims.user.id).map_err(|_| PostsError::InternalServerError)?;
-
     // save post to db
-    let post_id = sqlx::query!(
+    let post = sqlx::query!(
         r#"
 INSERT INTO posts ( id, author_id, title, content)
 VALUES ( $1, $2, $3, $4 )
-RETURNING id
+
+RETURNING *
             "#,
         Uuid::now_v7(),
-        user_id,
+        user_claims.user.id,
         post.title,
         post.content,
     )
     .fetch_one(&mut *transaction)
-    .await?
-    .id;
+    .await?;
 
     // save to image to db
-    let id = sqlx::query!(
+    let image = sqlx::query!(
         r#"
 INSERT INTO images ( id, user_id, post_id, path, content_type )
 VALUES ( $1, $2, $3, $4 , $5 )
-RETURNING id
+
+RETURNING *
     "#,
         Uuid::now_v7(),
-        user_id,
-        post_id,
+        user_claims.user.id,
+        post.id,
         upload.path,
         upload.content_type,
     )
     .fetch_one(&mut *transaction)
-    .await?
-    .id;
+    .await?;
 
     // upload image to s3
     if let Err(err) = storage
@@ -167,12 +175,34 @@ RETURNING id
     }
 
     transaction.commit().await?;
+    let post = PostResponse {
+        id: post.id,
+        title: post.title,
+        content: post.content,
+        created_at: post.created_at.to_string(),
+        user: UserResponse {
+            id: user_claims.user.id,
+            username: user_claims.user.username,
+            email: user_claims.user.email,
+        },
+        image: ImageResponse {
+            content_type: image.content_type,
+            path: image.path,
+        },
+    };
 
-    Ok(Json(json!({
-        "post_id": id.to_string(),
-    })))
+    Ok(Json(post))
 }
 
+/// Get post by id
+#[utoipa::path(
+    get,
+    path = "/api/posts/{post_id}",
+    responses(
+        (status = 200, description = "", body = PostResponse)
+    ),
+    tag = "Posts API"
+)]
 pub async fn get_post(
     State(db): State<PgPool>,
     Path(post_id): Path<Uuid>,
@@ -199,12 +229,12 @@ WHERE posts.id = $1
     };
 
     let post = PostResponse {
-        id: record.post_id.to_string(),
+        id: record.post_id,
         title: record.title,
         content: record.content,
         created_at: record.created_at.to_string(),
-        user: UserReponse {
-            id: record.user_id.to_string(),
+        user: UserResponse {
+            id: record.user_id,
             username: record.username,
             email: record.email,
         },
@@ -217,14 +247,18 @@ WHERE posts.id = $1
     Ok(Json(post))
 }
 
-#[derive(Debug, Deserialize)]
-pub struct PaginationParams {
-    #[serde(default = "Uuid::nil")]
-    min_id: Uuid,
-    #[serde(default = "Uuid::max")]
-    max_id: Uuid,
-}
-
+/// Get posts with pagination
+#[utoipa::path(
+    get,
+    path = "/api/posts/",
+    params(
+        PaginationParams,
+    ),
+    responses(
+        (status = 200, description = "", body = [PostResponse])
+    ),
+    tag = "Posts API"
+)]
 pub async fn get_posts_cursor(
     State(db): State<PgPool>,
     Query(pagination): Query<PaginationParams>,
@@ -258,12 +292,12 @@ LIMIT 10
     let posts = records
         .into_iter()
         .map(|r| PostResponse {
-            id: r.post_id.to_string(),
+            id: r.post_id,
             title: r.title,
             content: r.content,
             created_at: r.created_at.to_string(),
-            user: UserReponse {
-                id: r.user_id.to_string(),
+            user: UserResponse {
+                id: r.user_id,
                 username: r.username,
                 email: r.email,
             },

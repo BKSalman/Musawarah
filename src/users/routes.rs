@@ -3,29 +3,37 @@ use argon2::{
     Argon2, PasswordHash,
 };
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     Json,
 };
 use jwt_simple::prelude::*;
-use serde_json::{json, Value};
 use sqlx::PgPool;
 use uuid::Uuid;
 use validator::Validate;
 
 use crate::{
     posts::models::{ImageResponse, PostResponse},
-    JWT_KEY,
+    PaginationParams, JWT_KEY,
 };
 
 use super::{
-    models::{CreateUser, UserClaims, UserLogin, UserReponse},
+    models::{CreateUser, UserClaims, UserLogin, UserResponse, UserToken},
     UsersError,
 };
 
+/// Create User
+#[utoipa::path(
+    post,
+    path = "/api/users/",
+    responses(
+        (status = 200, description = "User successfully created", body = UserResponse)
+    ),
+    tag = "Users API"
+)]
 pub async fn create_user(
     State(db): State<PgPool>,
     Json(payload): Json<CreateUser>,
-) -> Result<Json<Value>, UsersError> {
+) -> Result<Json<UserResponse>, UsersError> {
     payload.validate()?;
 
     if payload.username.is_empty() || payload.password.is_empty() || payload.email.is_empty() {
@@ -44,11 +52,12 @@ pub async fn create_user(
         .hash_password(payload.password.as_bytes(), &salt)?
         .to_string();
 
-    let _id = sqlx::query!(
+    let user = sqlx::query!(
         r#"
 INSERT INTO users ( id, username, displayname, email, password )
 VALUES ( $1, $2, $3, $4 , $5)
-RETURNING id
+
+RETURNING *
             "#,
         uuid,
         payload.username.to_lowercase(),
@@ -62,28 +71,40 @@ RETURNING id
         sqlx::Error::Database(dbe) => match dbe.constraint() {
             Some("users_username_key") => UsersError::Conflict("username taken".into()),
             Some("users_email_key") => UsersError::Conflict("email taken".into()),
-            _ => UsersError::InternalServerError,
+            _ => {
+                tracing::debug!("create_user db error: {:#?}", dbe);
+                UsersError::InternalServerError
+            }
         },
         _ => {
             // TODO: log this instead of printing
-            println!("{e:#?}");
+            tracing::debug!("{e:#?}");
             UsersError::InternalServerError
         }
-    })?
-    .id;
+    })?;
 
-    // let user = UserReponse {
-    //     id: id.to_string(),
-    //     username: payload.username.to_lowercase(),
-    // };
+    let user = UserResponse {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+    };
 
-    Ok(Json(json!({"message": "registered successfully"})))
+    Ok(Json(user))
 }
 
+/// User login
+#[utoipa::path(
+    post,
+    path = "/api/users/login/",
+    responses(
+        (status = 200, description = "User authenticated", body = UserToken)
+    ),
+    tag = "Users API"
+)]
 pub async fn login(
     State(db): State<PgPool>,
     Json(payload): Json<UserLogin>,
-) -> Result<Json<Value>, UsersError> {
+) -> Result<Json<UserToken>, UsersError> {
     // argon2 is a good algorithm (not a security expert :))
     let argon2 = Argon2::default();
 
@@ -99,7 +120,10 @@ WHERE email = $1;
     .await
     // TODO: better error handling
     .map_err(|error| match error {
-        _ => UsersError::InternalServerError,
+        _ => {
+            tracing::debug!("login db error: {:#?}", error);
+            UsersError::InternalServerError
+        }
     })?;
 
     let Some(user) = record else {
@@ -117,8 +141,8 @@ WHERE email = $1;
 
     let claims = Claims::with_custom_claims(
         UserClaims {
-            user: UserReponse {
-                id: user.id.to_string(),
+            user: UserResponse {
+                id: user.id,
                 username: user.username,
                 email: user.email,
             },
@@ -128,19 +152,34 @@ WHERE email = $1;
 
     let token = JWT_KEY.authenticate(claims)?;
 
-    Ok(Json(json!({
-        "access_token": token,
-        "type": "Bearer",
-    })))
+    Ok(Json(UserToken {
+        access_token: token,
+        r#type: String::from("Bearer"),
+    }))
 }
 
+/// Get user posts by username
+#[utoipa::path(
+    get,
+    path = "/api/users/{username}",
+    params(
+        PaginationParams
+    ),
+    responses(
+        (status = 200, description = "Caller authorized. returned requested user's posts", body = [PostResponse]),
+        (status = StatusCode::UNAUTHORIZED, description = "Caller unauthorized", body = ErrorHandlingResponse)
+    ),
+    tag = "Users API"
+)]
 pub async fn get_user_posts(
     // prevent non logged users from
     // accessing a specific user's posts
     _: UserClaims,
     State(db): State<PgPool>,
     Path(username): Path<String>,
+    Query(pagination): Query<PaginationParams>,
 ) -> Result<Json<Vec<PostResponse>>, UsersError> {
+    // TODO: cursor shit
     let records = sqlx::query!(
         r#"
 SELECT users.id AS user_id, posts.id AS post_id,
@@ -153,9 +192,14 @@ INNER JOIN users
 ON users.id = posts.author_id
 INNER JOIN images
 ON posts.id = images.post_id
-WHERE username = $1;
+
+WHERE username = $1 AND posts.id > $2 AND posts.id < $3
+
+LIMIT 10
         "#,
-        username
+        username,
+        pagination.min_id,
+        pagination.max_id,
     )
     .fetch_all(&db)
     .await
@@ -165,12 +209,12 @@ WHERE username = $1;
     let posts = records
         .into_iter()
         .map(|r| PostResponse {
-            id: r.post_id.to_string(),
+            id: r.post_id,
             title: r.title,
             content: r.content,
             created_at: r.created_at.to_string(),
-            user: UserReponse {
-                id: r.user_id.to_string(),
+            user: UserResponse {
+                id: r.user_id,
                 username: r.username,
                 email: r.email,
             },
@@ -184,7 +228,15 @@ WHERE username = $1;
     Ok(Json(posts))
 }
 
-/// get user details for profile
+/// Get user details for profile
+#[utoipa::path(
+    get,
+    path = "/api/users/",
+    responses(
+        (status = 200, description = "Caller authorized. returned user info", body = UserClaims)
+    ),
+    tag = "Users API"
+)]
 pub async fn get_user(claims: UserClaims) -> Result<Json<UserClaims>, UsersError> {
     Ok(Json(claims))
 }
