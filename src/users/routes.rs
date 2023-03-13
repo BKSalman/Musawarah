@@ -25,8 +25,11 @@ use super::{
 #[utoipa::path(
     post,
     path = "/api/users/",
+    request_body(content = CreateUser, description = "Username, Email, and password", content_type = "application/json"),
     responses(
-        (status = 200, description = "User successfully created", body = UserResponse)
+        (status = 200, description = "User successfully created", body = UserResponse),
+        (status = StatusCode::BAD_REQUEST, description = "Fields validation error", body = ErrorHandlingResponse),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
     ),
     tag = "Users API"
 )]
@@ -43,7 +46,10 @@ pub async fn create_user(
     // v7 uuid allows for easier sorting
     let uuid = Uuid::now_v7();
 
-    let salt = SaltString::new("somethingsomething").expect("salt");
+    let salt = SaltString::new("somethingsomething").map_err(|err| {
+        tracing::debug!("salt string error: {:#?}", err);
+        UsersError::InternalServerError
+    })?;
 
     // argon2 is a good algorithm (not a security expert :))
     let argon2 = Argon2::default();
@@ -96,8 +102,11 @@ RETURNING *
 #[utoipa::path(
     post,
     path = "/api/users/login/",
+    request_body(content = UserLogin, description = "Email and password", content_type = "application/json"),
     responses(
-        (status = 200, description = "User authenticated", body = UserToken)
+        (status = 200, description = "User authenticated", body = UserToken),
+        (status = StatusCode::UNAUTHORIZED, description = "User unauthorized", body = ErrorHandlingResponse ),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
     ),
     tag = "Users API"
 )]
@@ -136,7 +145,7 @@ WHERE email = $1;
         .verify_password(payload.password.as_bytes(), &parsed_password)
         .is_err()
     {
-        return Err(UsersError::WrongPassword);
+        return Err(UsersError::InvalidCredentials);
     }
 
     let claims = Claims::with_custom_claims(
@@ -167,7 +176,11 @@ WHERE email = $1;
     ),
     responses(
         (status = 200, description = "Caller authorized. returned requested user's posts", body = [PostResponse]),
-        (status = StatusCode::UNAUTHORIZED, description = "Caller unauthorized", body = ErrorHandlingResponse)
+        (status = StatusCode::UNAUTHORIZED, description = "Caller unauthorized", body = ErrorHandlingResponse),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
+    ),
+    security(
+        ("jwt" = [])
     ),
     tag = "Users API"
 )]
@@ -228,12 +241,17 @@ LIMIT 10
     Ok(Json(posts))
 }
 
-/// Get user details for profile
+/// Get user details by token
 #[utoipa::path(
     get,
     path = "/api/users/",
     responses(
-        (status = 200, description = "Caller authorized. returned user info", body = UserClaims)
+        (status = 200, description = "Caller authorized. returned current user info", body = UserClaims),
+        (status = StatusCode::UNAUTHORIZED, description = "Caller unauthorized", body = ErrorHandlingResponse ),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
+    ),
+    security(
+        ("jwt" = [])
     ),
     tag = "Users API"
 )]

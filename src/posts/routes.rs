@@ -35,10 +35,11 @@ const ALLOWED_MIME_TYPES: [&str; 3] = ["image/jpeg", "image/jpg", "image/png"];
     request_body(content = CreatePost, description = "something something", content_type = "multipart/form-data"),
     responses(
         (status = 200, description = "Create new post", body = PostResponse),
-        (status = StatusCode::UNAUTHORIZED, description = "Caller unauthorized", body = ErrorHandlingResponse )
+        (status = StatusCode::UNAUTHORIZED, description = "Caller unauthorized", body = ErrorHandlingResponse ),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
     ),
     security(
-        ("api_key" = [])
+        ("jwt" = [])
     ),
     tag = "Posts API"
 )]
@@ -198,8 +199,16 @@ RETURNING *
 #[utoipa::path(
     get,
     path = "/api/posts/{post_id}",
+    params(
+        ("post_id" = Uuid, Path, description = "ID of the requested post"),
+    ),
     responses(
-        (status = 200, description = "", body = PostResponse)
+        (status = 200, description = "Caller authorized. returned requested post", body = PostResponse),
+        (status = StatusCode::UNAUTHORIZED, description = "Caller unauthorized", body = ErrorHandlingResponse ),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
+    ),
+    security(
+        ("jwt" = [])
     ),
     tag = "Posts API"
 )]
@@ -255,7 +264,8 @@ WHERE posts.id = $1
         PaginationParams,
     ),
     responses(
-        (status = 200, description = "", body = [PostResponse])
+        (status = 200, description = "", body = [PostResponse]),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
     ),
     tag = "Posts API"
 )]

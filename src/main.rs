@@ -10,7 +10,10 @@ use rmusawarah::{
     ApiDoc, AppState,
 };
 use sqlx::postgres::PgPoolOptions;
-use std::net::SocketAddr;
+use std::{
+    env,
+    net::{Ipv4Addr, SocketAddr},
+};
 use tower_http::{limit::RequestBodyLimitLayer, trace::TraceLayer};
 use tracing_subscriber::{
     prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt, EnvFilter,
@@ -25,9 +28,11 @@ async fn main() {
         .with(EnvFilter::from_default_env())
         .init();
 
+    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL env variable");
+
     let pool = PgPoolOptions::new()
         .max_connections(5)
-        .connect("postgres://postgres:postgrespw@localhost:55000")
+        .connect(&database_url)
         .await
         .expect("db connection");
 
@@ -58,7 +63,7 @@ async fn main() {
         .layer(TraceLayer::new_for_http())
         .with_state(app_state);
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], 6060));
+    let addr = SocketAddr::from((Ipv4Addr::UNSPECIFIED, 6060));
 
     tracing::debug!("listening on {}", addr);
 

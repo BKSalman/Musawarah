@@ -1,11 +1,11 @@
-use axum::{extract::FromRef, response::IntoResponse};
+use axum::{extract::FromRef, http::StatusCode, response::IntoResponse, Json};
 use jwt_simple::prelude::HS256Key;
 use once_cell::sync::Lazy;
 use s3::interface::Storage;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use utoipa::{
-    openapi::security::{ApiKey, ApiKeyValue, Http, HttpAuthScheme, SecurityScheme},
+    openapi::security::{Http, HttpAuthScheme, HttpBuilder, SecurityScheme},
     IntoParams, Modify, OpenApi, ToSchema,
 };
 use uuid::Uuid;
@@ -41,6 +41,8 @@ pub static JWT_KEY: Lazy<HS256Key> = Lazy::new(|| HS256Key::generate());
         schemas(posts::models::ImageResponse),
         schemas(users::models::UserResponse),
         schemas(users::models::UserClaims),
+        schemas(users::models::CreateUser),
+        schemas(users::models::UserLogin),
         schemas(users::models::UserToken),
         schemas(ErrorHandlingResponse),
     ),
@@ -79,10 +81,36 @@ pub struct SecurityAddon;
 impl Modify for SecurityAddon {
     fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
         if let Some(components) = openapi.components.as_mut() {
-            components.add_security_scheme(
-                "Bearer token",
-                SecurityScheme::Http(Http::new(HttpAuthScheme::Bearer)),
-            )
+            let bearer = HttpBuilder::new()
+                .scheme(HttpAuthScheme::Bearer)
+                .bearer_format("Bearer")
+                .build();
+            components.add_security_scheme("jwt", SecurityScheme::Http(bearer))
         }
     }
 }
+
+// TODO: add this
+
+// #[derive(thiserror::Error, Debug)]
+// pub enum CommonErrors {
+//     #[error("internal server error")]
+//     InternalServerError,
+// }
+
+// impl IntoResponse for CommonErrors {
+//     fn into_response(self) -> axum::response::Response {
+//         let (status, error_message) = match self {
+//             CommonErrors::InternalServerError => (
+//                 StatusCode::INTERNAL_SERVER_ERROR,
+//                 ErrorHandlingResponse {
+//                     errors: vec![self.to_string()],
+//                 },
+//             ),
+//         };
+
+//         let body = Json(error_message);
+
+//         (status, body).into_response()
+//     }
+// }

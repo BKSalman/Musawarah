@@ -2,12 +2,14 @@ use std::fs;
 
 use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::users::models::UserResponse;
 
-#[derive(Serialize, ToSchema)]
+#[derive(Serialize, ToSchema, TS)]
+#[ts(export)]
 pub struct PostResponse {
     pub id: Uuid,
     pub title: String,
@@ -17,7 +19,8 @@ pub struct PostResponse {
     pub image: ImageResponse,
 }
 
-#[derive(Serialize, ToSchema)]
+#[derive(Serialize, ToSchema, TS)]
+#[ts(export)]
 pub struct ImageResponse {
     pub content_type: String,
     pub path: String,

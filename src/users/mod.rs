@@ -1,6 +1,6 @@
 use axum::{http::StatusCode, response::IntoResponse, Json};
 
-use serde_json::json;
+use crate::ErrorHandlingResponse;
 
 pub mod models;
 pub mod routes;
@@ -13,8 +13,8 @@ pub enum UsersError {
     #[error("user not found")]
     UserNotFound,
 
-    #[error("wrong password")]
-    WrongPassword,
+    #[error("invalid credentials")]
+    InvalidCredentials,
 
     #[error("bad request")]
     BadRequest,
@@ -40,40 +40,58 @@ impl IntoResponse for UsersError {
         tracing::debug!("{}", self.to_string());
 
         let (status, error_message) = match self {
-            UsersError::UserNotFound => {
-                (StatusCode::NOT_FOUND, json!({"errors": [self.to_string()]}))
-            }
+            UsersError::UserNotFound => (
+                StatusCode::NOT_FOUND,
+                ErrorHandlingResponse {
+                    errors: vec![self.to_string()],
+                },
+            ),
             UsersError::BadRequest => (
                 StatusCode::BAD_REQUEST,
-                json!({"errors": [self.to_string()]}),
+                ErrorHandlingResponse {
+                    errors: vec![self.to_string()],
+                },
             ),
-            UsersError::Conflict(_) => {
-                (StatusCode::CONFLICT, json!({"errors": [self.to_string()]}))
-            }
-            UsersError::WrongPassword => (
+            UsersError::Conflict(_) => (
+                StatusCode::CONFLICT,
+                ErrorHandlingResponse {
+                    errors: vec![self.to_string()],
+                },
+            ),
+            UsersError::InvalidCredentials => (
                 StatusCode::UNAUTHORIZED,
-                json!({"errors": [self.to_string()]}),
+                ErrorHandlingResponse {
+                    errors: vec![self.to_string()],
+                },
             ),
             UsersError::Sqlx(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                json!({"errors": [self.to_string()]}),
+                ErrorHandlingResponse {
+                    errors: vec![self.to_string()],
+                },
             ),
             UsersError::InternalServerError => (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                json!({"errors": [self.to_string()]}),
+                ErrorHandlingResponse {
+                    errors: vec![self.to_string()],
+                },
             ),
             UsersError::Argon2(_) => {
                 // TODO: add logging for this
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    json!({ "errors": [self.to_string()] }),
+                    ErrorHandlingResponse {
+                        errors: vec![self.to_string()],
+                    },
                 )
             }
             UsersError::JWT(_) => {
                 // TODO: add logging for this
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    json!({ "errors": [self.to_string()] }),
+                    ErrorHandlingResponse {
+                        errors: vec![self.to_string()],
+                    },
                 )
             }
             UsersError::Validator(errors) => {
@@ -107,7 +125,7 @@ impl IntoResponse for UsersError {
                     })
                     .collect::<Vec<String>>();
 
-                (StatusCode::BAD_REQUEST, json!({ "errors": errors }))
+                (StatusCode::BAD_REQUEST, ErrorHandlingResponse { errors })
             }
         };
 
