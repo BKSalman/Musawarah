@@ -1,11 +1,11 @@
-use axum::{extract::FromRef, http::StatusCode, response::IntoResponse, Json};
+use axum::{extract::FromRef, response::IntoResponse};
 use jwt_simple::prelude::HS256Key;
 use once_cell::sync::Lazy;
 use s3::interface::Storage;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use utoipa::{
-    openapi::security::{Http, HttpAuthScheme, HttpBuilder, SecurityScheme},
+    openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme},
     IntoParams, Modify, OpenApi, ToSchema,
 };
 use uuid::Uuid;

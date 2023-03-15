@@ -1,5 +1,6 @@
 use axum::{
     extract::DefaultBodyLimit,
+    http::Method,
     routing::{get, post},
     Router,
 };
@@ -14,7 +15,11 @@ use std::{
     env,
     net::{Ipv4Addr, SocketAddr},
 };
-use tower_http::{limit::RequestBodyLimitLayer, trace::TraceLayer};
+use tower_http::{
+    cors::{Any, CorsLayer},
+    limit::RequestBodyLimitLayer,
+    trace::TraceLayer,
+};
 use tracing_subscriber::{
     prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt, EnvFilter,
 };
@@ -55,12 +60,17 @@ async fn main() {
         .route("/", get(get_posts_cursor))
         .route("/:post_id", get(get_post));
 
+    let cors = CorsLayer::new()
+        .allow_methods([Method::GET, Method::POST])
+        .allow_origin(Any);
+
     let app = Router::new()
         .merge(SwaggerUi::new("/swagger-ui").url("/api-doc/openapi.json", ApiDoc::openapi()))
         .route("/", get(root))
         .nest("/api/users", user_router)
         .nest("/api/posts", posts_router)
         .layer(TraceLayer::new_for_http())
+        .layer(cors)
         .with_state(app_state);
 
     let addr = SocketAddr::from((Ipv4Addr::UNSPECIFIED, 6060));
