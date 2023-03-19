@@ -1,11 +1,25 @@
+<script>
 
-<nav>
-nav bar
-</nav>
+    import Navbar from "$lib/components/Navbar.svelte";
+    import Sidebar from "$lib/components/Sidebar.svelte";
 
-<slot />
+</script>
+
+<Navbar/>
+<div class="main-container">
+    <Sidebar/>
+    <slot />
+</div>
+
 <br/>
 
 <footer>
     footer
 </footer>
+
+<style>
+    .main-container {
+        display: grid;
+        grid-template-columns: 1fr 7fr;
+    }
+</style>

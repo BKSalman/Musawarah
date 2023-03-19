@@ -1,4 +1,5 @@
-/** @type {import('./$types').PageServerData} */
+import type { PageServerData } from './$types';
+
 export async function load({fetch}) {
     const res = await fetch("http://127.0.0.1:6060/api/posts");
 
