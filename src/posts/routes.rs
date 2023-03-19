@@ -5,6 +5,7 @@ use axum::{
     Json,
 };
 use futures::TryStreamExt;
+use serde::Deserialize;
 use sqlx::PgPool;
 use tempfile::tempfile;
 use tokio::{
@@ -12,6 +13,7 @@ use tokio::{
     io::{AsyncSeekExt, AsyncWriteExt},
 };
 use tokio_util::io::ReaderStream;
+use tracing::debug;
 use uuid::Uuid;
 
 use crate::{
@@ -200,12 +202,19 @@ RETURNING *
     Ok(Json(post))
 }
 
+#[derive(Deserialize)]
+pub struct GetPostParams {
+    username: String,
+    post_id: Uuid,
+}
+
 /// Get post by id
 #[utoipa::path(
     get,
-    path = "/api/posts/{post_id}",
+    path = "/api/posts/{username}/{post_id}",
     params(
         ("post_id" = Uuid, Path, description = "ID of the requested post"),
+        ("username" = String, Path, description = "Post author's username"),
     ),
     responses(
         (status = 200, description = "Caller authorized. returned requested post", body = PostResponse),
@@ -219,7 +228,7 @@ RETURNING *
 )]
 pub async fn get_post(
     State(db): State<PgPool>,
-    Path(post_id): Path<Uuid>,
+    Path(params): Path<GetPostParams>,
 ) -> Result<Json<PostResponse>, PostsError> {
     let Some(record) = sqlx::query!(
         r#"
@@ -232,9 +241,10 @@ INNER JOIN images
 ON posts.id = images.post_id
 INNER JOIN users
 ON posts.author_id = users.id
-WHERE posts.id = $1
+WHERE posts.id = $1 AND users.username = $2
         "#,
-        post_id
+        params.post_id,
+        params.username,
     )
     .fetch_optional(&db)
     // TODO: map this error
