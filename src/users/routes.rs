@@ -101,7 +101,7 @@ RETURNING *
 /// User login
 #[utoipa::path(
     post,
-    path = "/api/users/login/",
+    path = "/api/users/login",
     request_body(content = UserLogin, description = "Email and password", content_type = "application/json"),
     responses(
         (status = 200, description = "User authenticated", body = UserToken),
@@ -237,6 +237,10 @@ LIMIT 10
             },
         })
         .collect::<Vec<PostResponse>>();
+
+    if posts.len() == 0 {
+        return Err(UsersError::UserNotFound);
+    }
 
     Ok(Json(posts))
 }

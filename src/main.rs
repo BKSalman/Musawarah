@@ -1,6 +1,6 @@
 use axum::{
     extract::DefaultBodyLimit,
-    http::Method,
+    http::{header::AUTHORIZATION, Method},
     routing::{get, post},
     Router,
 };
@@ -62,6 +62,7 @@ async fn main() {
 
     let cors = CorsLayer::new()
         .allow_methods([Method::GET, Method::POST])
+        .allow_headers([AUTHORIZATION])
         .allow_origin(Any);
 
     let app = Router::new()
