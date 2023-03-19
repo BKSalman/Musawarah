@@ -90,6 +90,7 @@ impl Storage {
         path: &str,
         input_stream: impl Stream<Item = super::Result<Bytes>> + 'static + Send,
         content_length: i64,
+        content_type: &str,
     ) -> super::Result<()> {
         let body = BoxBody::new(StreamBody {
             inner: SyncWrapper::new(input_stream),
@@ -100,6 +101,7 @@ impl Storage {
             .bucket(&self.bucket_name)
             .key(path)
             .content_length(content_length)
+            .content_type(content_type)
             .body(ByteStream::new(SdkBody::from_dyn(body)))
             .send()
             .await?;

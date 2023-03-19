@@ -163,7 +163,12 @@ RETURNING *
 
     // upload image to s3
     if let Err(err) = storage
-        .put(&upload.path, upload.stream, content_length)
+        .put(
+            &upload.path,
+            upload.stream,
+            content_length,
+            &upload.content_type,
+        )
         .await
         .map_err(|err| {
             tracing::debug!("s3 error: {:#?}", err);
