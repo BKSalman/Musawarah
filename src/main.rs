@@ -1,6 +1,9 @@
 use axum::{
     extract::DefaultBodyLimit,
-    http::{header::AUTHORIZATION, Method},
+    http::{
+        header::{AUTHORIZATION, CONTENT_TYPE},
+        Method,
+    },
     routing::{get, post},
     Router,
 };
@@ -58,11 +61,11 @@ async fn main() {
         // TODO: image compression
         .layer(RequestBodyLimitLayer::new(5 * 1024 * 1024 /* 5mb */))
         .route("/", get(get_posts_cursor))
-        .route("/:post_id", get(get_post));
+        .route("/:username/:post_id", get(get_post));
 
     let cors = CorsLayer::new()
         .allow_methods([Method::GET, Method::POST])
-        .allow_headers([AUTHORIZATION])
+        .allow_headers([AUTHORIZATION, CONTENT_TYPE])
         .allow_origin(Any);
 
     let app = Router::new()
