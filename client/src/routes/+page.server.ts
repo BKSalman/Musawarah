@@ -1,3 +1,4 @@
+import type { PostResponse } from '../../../bindings/PostResponse';
 import type { PageServerData } from './$types';
 
 export async function load({fetch}) {
@@ -10,7 +11,7 @@ export async function load({fetch}) {
         };
     }
 
-    const data = await res.json();
+    const data: PostResponse[] = await res.json();
 
     return {
         posts: data
