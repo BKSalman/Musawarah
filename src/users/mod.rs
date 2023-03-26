@@ -19,6 +19,9 @@ pub enum UsersError {
     #[error("bad request")]
     BadRequest,
 
+    #[error("user has no posts")]
+    HasNoPosts,
+
     #[error("internal server error")]
     JWT(#[from] jwt_simple::Error),
 
@@ -29,7 +32,7 @@ pub enum UsersError {
     Argon2(#[from] argon2::password_hash::Error),
 
     #[error("validation error: {0}")]
-    Validator(#[from] validator::ValidationErrors),
+    Validator(#[from] garde::Errors),
 
     #[error("{0}")]
     Conflict(String),
@@ -44,6 +47,12 @@ impl IntoResponse for UsersError {
                 StatusCode::NOT_FOUND,
                 ErrorHandlingResponse {
                     errors: vec![self.to_string()],
+                },
+            ),
+            UsersError::HasNoPosts => (
+                StatusCode::NOT_FOUND,
+                ErrorHandlingResponse {
+                    errors: vec![String::from("user has no posts")],
                 },
             ),
             UsersError::BadRequest => (
@@ -96,32 +105,13 @@ impl IntoResponse for UsersError {
             }
             UsersError::Validator(errors) => {
                 let errors = errors
-                    .errors()
-                    .iter()
-                    .map(|(field_name, field_error)| match field_error {
-                        validator::ValidationErrorsKind::Field(errors) => errors
+                    .fields
+                    .into_values()
+                    .map(|field_error| {
+                        field_error
                             .iter()
-                            .map(|error| match error.code.as_ref() {
-                                "length" => format!(
-                                    "{field_name} length: minimum = {}, maximum = {}",
-                                    error
-                                        .params
-                                        .get("min")
-                                        .expect("min username limit")
-                                        .as_i64()
-                                        .expect("min number"),
-                                    error
-                                        .params
-                                        .get("max")
-                                        .unwrap_or(&serde_json::Value::Number(i32::MAX.into()))
-                                        .as_i64()
-                                        .expect("max number"),
-                                ),
-                                "email" => String::from("email not valid"),
-                                _ => todo!(),
-                            })
-                            .collect(),
-                        _ => todo!(),
+                            .map(|error| error.message.to_string())
+                            .collect()
                     })
                     .collect::<Vec<String>>();
 

@@ -1,24 +1,24 @@
+use garde::Validate;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use utoipa::ToSchema;
 use uuid::Uuid;
-use validator::Validate;
 
 #[derive(Validate, Deserialize, ToSchema, TS)]
 pub struct CreateUser {
-    #[validate(length(min = 5, max = 60))]
+    #[garde(length(min = 5, max = 60))]
     pub username: String,
-    #[validate(email)]
+    #[garde(email)]
     pub email: String,
-    #[validate(length(min = 8))]
+    #[garde(length(min = 8))]
     pub password: String,
 }
 
 #[derive(Validate, Deserialize, ToSchema, TS)]
 pub struct UserLogin {
-    #[validate(email)]
+    #[garde(email)]
     pub email: String,
-    #[validate(length(min = 8))]
+    #[garde(length(min = 8))]
     pub password: String,
 }
 
@@ -36,6 +36,7 @@ pub struct UserClaims {
 }
 
 #[derive(Debug, Deserialize, Serialize, ToSchema, TS)]
+#[ts(export)]
 pub struct UserToken {
     pub access_token: String,
     pub r#type: String,
