@@ -63,7 +63,7 @@ pub struct PaginationParams {
     max_id: Uuid,
 }
 
-#[derive(Serialize, Deserialize, ToSchema)]
+#[derive(Serialize, Deserialize, ToSchema, Debug)]
 pub struct ErrorHandlingResponse {
     pub errors: Vec<String>,
 }
