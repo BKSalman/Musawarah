@@ -191,7 +191,9 @@ RETURNING *
         user: UserResponse {
             id: user_claims.user.id,
             username: user_claims.user.username,
+            displayname: user_claims.user.displayname,
             email: user_claims.user.email,
+            profile_image: user_claims.user.profile_image,
         },
         image: ImageResponse {
             content_type: image.content_type,
@@ -234,13 +236,16 @@ pub async fn get_post(
         r#"
 SELECT images.id AS image_id, posts.id AS post_id, users.id AS user_id, images.content_type,
 images.path, posts.title, posts.content, posts.created_at,
-users.username, users.email
+users.username, users.email, users.displayname,
+profile_images.path AS profile_image_path, profile_images.content_type AS profile_image_content_type
 
 FROM posts
 INNER JOIN images
 ON posts.id = images.post_id
 INNER JOIN users
 ON posts.author_id = users.id
+INNER JOIN profile_images
+ON posts.author_id = profile_images.user_id
 WHERE posts.id = $1 AND users.username = $2
         "#,
         params.post_id,
@@ -260,7 +265,12 @@ WHERE posts.id = $1 AND users.username = $2
         user: UserResponse {
             id: record.user_id,
             username: record.username,
+            displayname: record.displayname,
             email: record.email,
+            profile_image: ImageResponse {
+                path: record.profile_image_path,
+                content_type: record.profile_image_content_type,
+            },
         },
         image: ImageResponse {
             content_type: record.content_type,
@@ -293,13 +303,16 @@ pub async fn get_posts_cursor(
         r#"
 SELECT images.id AS image_id, posts.id AS post_id, users.id AS user_id, images.content_type,
 images.path, posts.title, posts.content, posts.created_at,
-users.username, users.email
+users.username, users.email, users.displayname,
+profile_images.path AS profile_image_path, profile_images.content_type AS profile_image_content_type
 
 FROM posts
 INNER JOIN images
 ON posts.id = images.post_id
 INNER JOIN users
 ON posts.author_id = users.id
+INNER JOIN profile_images
+ON posts.author_id = profile_images.user_id
 
 WHERE posts.id > $1 AND posts.id < $2
 ORDER BY posts.id DESC
@@ -324,7 +337,12 @@ LIMIT 10
             user: UserResponse {
                 id: r.user_id,
                 username: r.username,
+                displayname: r.displayname,
                 email: r.email,
+                profile_image: ImageResponse {
+                    path: r.profile_image_path,
+                    content_type: r.profile_image_content_type,
+                },
             },
             image: ImageResponse {
                 content_type: r.content_type,

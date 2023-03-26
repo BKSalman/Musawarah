@@ -19,7 +19,7 @@ pub struct PostResponse {
     pub image: ImageResponse,
 }
 
-#[derive(Serialize, ToSchema, TS)]
+#[derive(Serialize, Deserialize, ToSchema, TS, Debug)]
 #[ts(export)]
 pub struct ImageResponse {
     pub content_type: String,

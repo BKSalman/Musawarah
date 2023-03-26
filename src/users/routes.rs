@@ -43,9 +43,6 @@ pub async fn create_user(
         return Err(UsersError::BadRequest);
     }
 
-    // v7 uuid allows for easier sorting
-    let uuid = Uuid::now_v7();
-
     let salt = SaltString::new("somethingsomething").map_err(|err| {
         tracing::debug!("salt string error: {:#?}", err);
         UsersError::InternalServerError
@@ -58,18 +55,40 @@ pub async fn create_user(
         .hash_password(payload.password.as_bytes(), &salt)?
         .to_string();
 
-    let user = sqlx::query!(
-        r#"
-INSERT INTO users ( id, username, displayname, email, password )
-VALUES ( $1, $2, $3, $4 , $5)
+    // v7 uuid allows for easier sorting
+    let user_id = Uuid::now_v7();
 
-RETURNING *
+    let record = sqlx::query!(
+        r#"
+WITH user_insert AS (
+    INSERT INTO users ( id, username, displayname, email, password )
+    VALUES ( $1, $2, $3, $4, $5 )
+
+    RETURNING *
+),
+profile_image_insert AS (
+    INSERT INTO profile_images ( id, path, content_type, user_id )
+    VALUES ( $6, $7, $8, $9 )
+
+    RETURNING *
+)
+SELECT user_insert.id AS user_id, user_insert.username,
+user_insert.displayname, user_insert.email,
+profile_image_insert.id AS profile_image_id, profile_image_insert.path,
+profile_image_insert.content_type
+
+FROM user_insert, profile_image_insert
             "#,
-        uuid,
+        // v7 uuid allows for easier sorting
+        user_id,
         payload.username.to_lowercase(),
         payload.username,
         payload.email,
         hashed_password,
+        Uuid::now_v7(),
+        "ppl.png",
+        "image/webp",
+        user_id,
     )
     .fetch_one(&db)
     .await
@@ -90,9 +109,14 @@ RETURNING *
     })?;
 
     let user = UserResponse {
-        id: user.id,
-        username: user.username,
-        email: user.email,
+        id: record.user_id,
+        displayname: record.displayname,
+        username: record.username,
+        profile_image: ImageResponse {
+            path: record.path,
+            content_type: record.content_type,
+        },
+        email: record.email,
     };
 
     Ok(Json(user))
@@ -119,8 +143,13 @@ pub async fn login(
 
     let record = sqlx::query!(
         r#"
-SELECT users.*
+SELECT users.id AS user_id, users.displayname, users.username, users.email, users.password,
+profile_images.path, profile_images.content_type
 FROM users
+
+INNER JOIN profile_images
+ON users.id = profile_images.user_id
+
 WHERE email = $1;
         "#,
         payload.email,
@@ -135,11 +164,11 @@ WHERE email = $1;
         }
     })?;
 
-    let Some(user) = record else {
+    let Some(record) = record else {
         return Err(UsersError::UserNotFound);
     };
 
-    let parsed_password = PasswordHash::new(&user.password)?;
+    let parsed_password = PasswordHash::new(&record.password)?;
 
     if argon2
         .verify_password(payload.password.as_bytes(), &parsed_password)
@@ -151,9 +180,14 @@ WHERE email = $1;
     let claims = Claims::with_custom_claims(
         UserClaims {
             user: UserResponse {
-                id: user.id,
-                username: user.username,
-                email: user.email,
+                id: record.user_id,
+                displayname: record.displayname,
+                username: record.username,
+                email: record.email,
+                profile_image: ImageResponse {
+                    path: record.path,
+                    content_type: record.content_type,
+                },
             },
         },
         Duration::from_mins(20),
@@ -214,13 +248,19 @@ WHERE username = $1
 SELECT users.id AS user_id, posts.id AS post_id,
 users.displayname, users.username, users.email,
 posts.content, posts.title, posts.created_at,
-images.path, images.content_type, images.id AS image_id
+images.path AS post_image_path,
+images.content_type AS post_image_content_type, images.id AS image_id,
+profile_images.content_type AS profile_image_content_type,
+profile_images.path AS profile_image_path,
+profile_images.id AS profile_image_id
 
 FROM posts
 INNER JOIN users
 ON users.id = posts.author_id
 INNER JOIN images
 ON posts.id = images.post_id
+INNER JOIN profile_images
+ON users.id = profile_images.user_id
 
 WHERE username = $1 AND posts.id > $2 AND posts.id < $3
 
@@ -244,12 +284,17 @@ LIMIT 10
             created_at: r.created_at.to_string(),
             user: UserResponse {
                 id: r.user_id,
+                displayname: r.displayname,
                 username: r.username,
                 email: r.email,
+                profile_image: ImageResponse {
+                    path: r.profile_image_path,
+                    content_type: r.profile_image_content_type,
+                },
             },
             image: ImageResponse {
-                content_type: r.content_type,
-                path: r.path,
+                content_type: r.post_image_content_type,
+                path: r.post_image_path,
             },
         })
         .collect::<Vec<PostResponse>>();
