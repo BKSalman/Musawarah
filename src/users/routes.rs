@@ -6,10 +6,10 @@ use axum::{
     extract::{Path, Query, State},
     Json,
 };
+use garde::Validate;
 use jwt_simple::prelude::*;
 use sqlx::PgPool;
 use uuid::Uuid;
-use validator::Validate;
 
 use crate::{
     posts::models::{ImageResponse, PostResponse},
@@ -37,7 +37,7 @@ pub async fn create_user(
     State(db): State<PgPool>,
     Json(payload): Json<CreateUser>,
 ) -> Result<Json<UserResponse>, UsersError> {
-    payload.validate()?;
+    payload.validate(&())?;
 
     if payload.username.is_empty() || payload.password.is_empty() || payload.email.is_empty() {
         return Err(UsersError::BadRequest);
@@ -192,7 +192,23 @@ pub async fn get_user_posts(
     Path(username): Path<String>,
     Query(pagination): Query<PaginationParams>,
 ) -> Result<Json<Vec<PostResponse>>, UsersError> {
-    // TODO: cursor shit
+    // make sure requested user exists
+    sqlx::query!(
+        r#"
+SELECT users.username
+
+FROM users
+
+WHERE username = $1
+        "#,
+        username,
+    )
+    .fetch_optional(&db)
+    .await
+    // TODO: better error handling
+    .map_err(|_| UsersError::UserNotFound)?
+    .ok_or(UsersError::UserNotFound)?;
+
     let records = sqlx::query!(
         r#"
 SELECT users.id AS user_id, posts.id AS post_id,
@@ -239,7 +255,7 @@ LIMIT 10
         .collect::<Vec<PostResponse>>();
 
     if posts.len() == 0 {
-        return Err(UsersError::UserNotFound);
+        return Err(UsersError::HasNoPosts);
     }
 
     Ok(Json(posts))
