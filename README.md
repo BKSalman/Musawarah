@@ -20,8 +20,9 @@ Frontend:
 # Building/Running the project
 if you are on Linux/MacOS/WSL you can use the flake.nix file that contains the full dev environment:
 
-just install [the nix package manager](https://zero-to-nix.com/start/install) and run in project root:
+just install [the nix package manager](https://zero-to-nix.com/start/install) and run:
 ```
+# in project root
 nix develop
 ```
 ### Backend
@@ -41,23 +42,31 @@ DATABASE_URL=postgres://postgres:musawarah-dev@localhost:5432
 ```
 there are more environment variables needed, for those you can talk to Salman to give it to you :)
 
-in project root:
+after you have all environment variables, you need to export them all in bash you do:
+```bash
+# in project root
+export $(cat .env)
+```
+
 > this will use the migration details in the `migrations` folder to add to the database
 ```
+# in project root
 sqlx migrate run
 ```
 
-in project root:
 #### Run dev server
 ```
+# in project root
 cargo run
 ```
 #### Run dev server with logging
 ```
+# in project root
 RUST_LOG=debug cargo run
 ```
 #### Run tests & generate TS bindings/types
 ```
+# in project root
 cargo test
 ```
 
