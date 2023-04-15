@@ -35,6 +35,12 @@ to setup a dev database run the following commands:
 ```
 docker run --name musawarah-dev -e POSTGRES_PASSWORD=musawarah-dev -d postgres -p 5432:5432
 ```
+then create a `.env` file in the project root with the following line:
+```
+DATABASE_URL=postgres://postgres:musawarah-dev@localhost:5432
+```
+there are more environment variables needed, for those you can talk to Salman to give it to you :)
+
 in project root:
 > this will use the migration details in the `migrations` folder to add to the database
 ```
