@@ -42,15 +42,15 @@ sqlx migrate run
 ```
 
 in project root:
-
+#### Run dev server
 ```
 cargo run
 ```
-for logging:
+#### Run dev server with logging
 ```
 RUST_LOG=debug cargo run
 ```
-run tests & generate TS bindings/types:
+#### Run tests & generate TS bindings/types
 ```
 cargo test
 ```
