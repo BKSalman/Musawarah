@@ -50,6 +50,9 @@ export $(cat .env)
 
 > this will use the migration details in the `migrations` folder to add to the database
 ```
+# first install sqlx with cargo
+cargo install sqlx-cli
+
 # in project root
 sqlx migrate run
 ```
