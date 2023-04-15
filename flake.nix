@@ -20,8 +20,8 @@
             fd
             bat
             zoxide
-            helix
             
+            # database
             postgresql
             docker
           ];
@@ -32,14 +32,16 @@
             (rust-bin.stable.latest.default.override {
               extensions = [ "rust-src" "rust-analyzer" ];
             })
-
-            # frontend
-            nodePackages_latest.pnpm
-            nodejs
-
             # needed for openssl dependant packages
             openssl
             pkg-config
+
+            # frontend
+            nodejs
+            nodePackages_latest.pnpm
+            # LSPs
+            nodePackages_latest.svelte-language-server
+            nodePackages_latest.vscode-langservers-extracted
           ];
 
           shellHook = ''
