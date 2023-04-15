@@ -56,6 +56,8 @@ cargo test
 ```
 
 ### Frontend
+[frontend setup instructions](https://github.com/BKSalman/rmusawarah/blob/main/client/README.md)
+
 make sure you have [nodejs](https://nodejs.org/en) & [pnpm](https://pnpm.io/) installed (already done if using nix)
 
 in `client` folder run:
