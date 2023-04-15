@@ -34,7 +34,7 @@ to setup a dev database run the following commands:
 
 (already done if using nix)
 ```bash
-docker run --name musawarah-dev -e POSTGRES_PASSWORD=musawarah-dev -d postgres -p 5432:5432
+docker run --name musawarah-dev -p 5432:5432 -e POSTGRES_PASSWORD=musawarah-dev -d postgres
 ```
 then create a `.env` file in the project root with the following line:
 ```bash
