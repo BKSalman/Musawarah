@@ -105,14 +105,9 @@ impl IntoResponse for UsersError {
             }
             UsersError::Validator(errors) => {
                 let errors = errors
-                    .fields
-                    .into_values()
-                    .map(|field_error| {
-                        field_error
-                            .iter()
-                            .map(|error| error.message.to_string())
-                            .collect()
-                    })
+                    .flatten()
+                    .iter()
+                    .map(|(path, error)| format!("{path}: {error}"))
                     .collect::<Vec<String>>();
 
                 (StatusCode::BAD_REQUEST, ErrorHandlingResponse { errors })

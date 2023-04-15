@@ -14,6 +14,7 @@ aws-smithy-http = "0.54.4"
 axum = { version = "0.6.9", features = ["macros", "headers", "multipart"] }
 bytes = "1.4.0"
 derive_builder = "0.12.0"
+dotenv = "0.15.0"
 futures = "0.3.26"
 futures-util = "0.3.26"
 garde = "0.6.1"

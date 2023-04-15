@@ -7,6 +7,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
+use dotenv::dotenv;
 use rmusawarah::{
     posts::routes::{create_post, get_post, get_posts_cursor},
     s3::helpers::setup_storage,
@@ -35,6 +36,10 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer())
         .with(EnvFilter::from_default_env())
         .init();
+
+    if let Err(err) = dotenv() {
+        tracing::error!("Could not load .env file: {}", err);
+    }
 
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL env variable");
 
