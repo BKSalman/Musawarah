@@ -1,4 +1,4 @@
-# مُصَوّرَة - Musawarah
+# مُصَوّرَة
 
 A platform for artists to share their creative work
 
