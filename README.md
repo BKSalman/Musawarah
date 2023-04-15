@@ -1,6 +1,3 @@
-
-# WIP README
-
 # مُصَوّرَة - Musawarah
 
 A platform for artists to share their creative work
