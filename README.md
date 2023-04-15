@@ -58,16 +58,5 @@ cargo test
 ### Frontend
 [frontend setup instructions](https://github.com/BKSalman/rmusawarah/blob/main/client/README.md)
 
-make sure you have [nodejs](https://nodejs.org/en) & [pnpm](https://pnpm.io/) installed (already done if using nix)
-
-in `client` folder run:
-```
-pnpm run dev
-```
-run checks:
-```
-pnpm run check
-```
-
 # Endpoints
 All endpoints are documented with ``OpenAPI`` documentation standard, and can be viewed in ``Swagger`` by opening ``<baseurl>/swagger-ui/`` while the server is running
