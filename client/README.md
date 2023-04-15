@@ -3,6 +3,13 @@
 make sure you have [nodejs](https://nodejs.org/en) & [pnpm](https://pnpm.io/) installed (already done if using nix)
 
 working directory: `<root>/client`
+
+## Setup
+To install the project dependencies you need to use:
+```bash
+pnpm install
+```
+
 ## Developing
 
 Once you've installed dependencies with `pnpm install`, start a development server:
