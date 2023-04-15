@@ -21,7 +21,7 @@ Frontend:
 if you are on Linux/MacOS/WSL you can use the flake.nix file that contains the full dev environment:
 
 just install [the nix package manager](https://zero-to-nix.com/start/install) and run:
-```
+```bash
 # in project root
 nix develop
 ```
@@ -33,11 +33,11 @@ to setup a dev database run the following commands:
 > this will run a local docker postgresql database that you can develop on
 
 (already done if using nix)
-```
+```bash
 docker run --name musawarah-dev -e POSTGRES_PASSWORD=musawarah-dev -d postgres -p 5432:5432
 ```
 then create a `.env` file in the project root with the following line:
-```
+```bash
 DATABASE_URL=postgres://postgres:musawarah-dev@localhost:5432
 ```
 there are more environment variables needed, for those you can talk to Salman to give it to you :)
@@ -49,7 +49,7 @@ export $(cat .env)
 ```
 
 > this will use the migration details in the `migrations` folder to add to the database
-```
+```bash
 # first install sqlx with cargo
 cargo install sqlx-cli
 
@@ -58,17 +58,17 @@ sqlx migrate run
 ```
 
 #### Run dev server
-```
+```bash
 # in project root
 cargo run
 ```
 #### Run dev server with logging
-```
+```bash
 # in project root
 RUST_LOG=debug cargo run
 ```
 #### Run tests & generate TS bindings/types
-```
+```bash
 # in project root
 cargo test
 ```
