@@ -1,6 +1,6 @@
 # مُصَوّرَة
 
-A platform for artists to share their creative work
+منصة للقصص المصورة
 
 # Built with
 This platform is developed using the following tools and technologies:
