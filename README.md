@@ -58,5 +58,5 @@ cargo test
 ### Frontend
 [frontend setup instructions](https://github.com/BKSalman/rmusawarah/blob/main/client/README.md)
 
-# Endpoints
+# Backend Endpoints
 All endpoints are documented with ``OpenAPI`` documentation standard, and can be viewed in ``Swagger`` by opening ``<baseurl>/swagger-ui/`` while the server is running
