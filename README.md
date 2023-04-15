@@ -18,7 +18,7 @@ Frontend:
 - [sveltekit-superforms](https://github.com/ciscoheat/sveltekit-superforms) Useful tools for Sveltekit forms
 
 # Building/Running the project
-if you are on Linux/MacOS/WSL you can use the flake.nix file that contains full dev environment:
+if you are on Linux/MacOS/WSL you can use the flake.nix file that contains the full dev environment:
 
 just install [the nix package manager](https://zero-to-nix.com/start/install) and run in project root:
 ```
