@@ -19,6 +19,34 @@ Front-end:
 - [Svelte-kit](https://kit.svelte.dev/) Meta webframework
 - [sveltekit-superforms](https://github.com/ciscoheat/sveltekit-superforms) Useful tools for Sveltekit forms
 
+# Building/Running the project
+### Backend
+make sure you have [Rust](https://www.rust-lang.org/) installed
+in repository root run:
+```
+cargo run
+```
+for logging:
+```
+RUST_LOG=debug cargo run
+```
+run tests & generate TS bindings:
+```
+cargo test
+```
+
+### Frontend
+make sure you have [nodejs](https://nodejs.org/en) & [pnpm](https://pnpm.io/) installed
+
+in `client` folder run:
+```
+pnpm run dev
+```
+run checks:
+```
+pnpm run check
+```
+
 # Endpoints
 ### All endpoints are documented with ``OpenAPI`` documentation standard, and can be viewed in ``Swagger``
 
