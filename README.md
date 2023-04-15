@@ -26,7 +26,7 @@ just install [the nix package manager](https://zero-to-nix.com/start/install) an
 nix develop
 ```
 ### Backend
-make sure you have [Rust](https://www.rust-lang.org/) & [sqlx-cli](https://crates.io/crates/sqlx-cli) & [docker](https://www.docker.com/) installed (already done if using nix)
+make sure you have [Rust](https://doc.rust-lang.org/book/ch01-01-installation.html) & [sqlx-cli](https://crates.io/crates/sqlx-cli) & [docker](https://www.docker.com/) installed (already done if using nix)
 #### Database
 to setup a dev database run the following commands:
 
