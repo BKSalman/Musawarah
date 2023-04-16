@@ -28,10 +28,13 @@
           
           buildInputs = [
             # backend
-            sqlx-cli
             (rust-bin.stable.latest.default.override {
               extensions = [ "rust-src" "rust-analyzer" ];
             })
+            sqlx-cli
+            # auto reload server on save
+            # cargo watch -x run
+            cargo-watch
             # needed for openssl dependant packages
             openssl
             pkg-config
