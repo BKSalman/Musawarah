@@ -1,25 +1,24 @@
-<script>
-
+<script lang="ts">
     import Navbar from "$lib/components/Navbar.svelte";
     import Sidebar from "$lib/components/Sidebar.svelte";
 
+    let open = false;
 </script>
 
-<Navbar/>
-<div class="main-container">
-    <Sidebar/>
+<Navbar bind:open />
+<div class="layout-container">
+    <Sidebar {open} />
     <slot />
 </div>
 
-<br/>
+<br />
 
-<footer>
-    footer
-</footer>
+<footer>footer</footer>
 
 <style>
-    .main-container {
+    .layout-container {
         display: grid;
         grid-template-columns: 1fr 7fr;
     }
 </style>
+
