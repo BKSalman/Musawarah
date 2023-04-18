@@ -10,37 +10,34 @@
     FlyParams,
   } from "svelte/transition";
   export let fontSize: "sm" | "md" | "lg" | "xl" = "md";
-  export let transitions:
-    | {
-        in: {
-          func: any;
-          options:
-            | FadeParams
-            | BlurParams
-            | FlyParams
-            | SlideParams
-            | ScaleParams
-            | DrawParams
-            | CrossfadeParams;
-        };
-        out: {
-          func: any;
-          options:
-            | FadeParams
-            | BlurParams
-            | FlyParams
-            | SlideParams
-            | ScaleParams
-            | DrawParams
-            | CrossfadeParams;
-        };
-      }
-    | {} = {};
+  export let transitions: {
+    in: {
+      func: any;
+      options:
+        | FadeParams
+        | BlurParams
+        | FlyParams
+        | SlideParams
+        | ScaleParams
+        | DrawParams
+        | CrossfadeParams;
+    };
+    out: {
+      func: any;
+      options:
+        | FadeParams
+        | BlurParams
+        | FlyParams
+        | SlideParams
+        | ScaleParams
+        | DrawParams
+        | CrossfadeParams;
+    };
+  } | null = null;
   export let className: string = "";
 
   const { inFunc, inOptions, outFunc, outOptions } =
     readTransitions(transitions);
-  console.log(inFunc);
 </script>
 
 <span
