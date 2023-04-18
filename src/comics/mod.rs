@@ -5,10 +5,9 @@ use crate::ErrorHandlingResponse;
 
 pub mod models;
 pub mod routes;
-mod utils;
 
 #[derive(thiserror::Error, Debug)]
-pub enum PostsError {
+pub enum ComicsError {
     #[error("internal server error")]
     InternalServerError,
 
@@ -33,20 +32,20 @@ pub enum PostsError {
     Conflict(String),
 }
 
-impl IntoResponse for PostsError {
+impl IntoResponse for ComicsError {
     fn into_response(self) -> axum::response::Response {
         tracing::debug!("{}", self.to_string());
 
         let (status, error_message) = match self {
-            PostsError::PostNotFound => (StatusCode::NOT_FOUND, vec![self.to_string()]),
-            PostsError::BadRequest => (StatusCode::BAD_REQUEST, vec![self.to_string()]),
-            PostsError::ImageTooLarge => (StatusCode::BAD_REQUEST, vec![self.to_string()]),
-            PostsError::Conflict(_) => (StatusCode::CONFLICT, vec![self.to_string()]),
-            PostsError::Sqlx(_) => (StatusCode::INTERNAL_SERVER_ERROR, vec![self.to_string()]),
-            PostsError::InternalServerError => {
+            ComicsError::PostNotFound => (StatusCode::NOT_FOUND, vec![self.to_string()]),
+            ComicsError::BadRequest => (StatusCode::BAD_REQUEST, vec![self.to_string()]),
+            ComicsError::ImageTooLarge => (StatusCode::BAD_REQUEST, vec![self.to_string()]),
+            ComicsError::Conflict(_) => (StatusCode::CONFLICT, vec![self.to_string()]),
+            ComicsError::Sqlx(_) => (StatusCode::INTERNAL_SERVER_ERROR, vec![self.to_string()]),
+            ComicsError::InternalServerError => {
                 (StatusCode::INTERNAL_SERVER_ERROR, vec![self.to_string()])
             }
-            PostsError::JWT(_) => {
+            ComicsError::JWT(_) => {
                 // TODO: add logging for this
                 (StatusCode::INTERNAL_SERVER_ERROR, vec![self.to_string()])
             }

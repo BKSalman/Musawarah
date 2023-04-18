@@ -4,7 +4,7 @@ use ts_rs::TS;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::posts::models::ImageResponse;
+use crate::comics::models::ImageResponse;
 
 #[derive(Validate, Deserialize, ToSchema, TS)]
 pub struct CreateUser {

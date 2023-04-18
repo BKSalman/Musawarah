@@ -9,9 +9,10 @@ use axum::{
 };
 use dotenv::dotenv;
 use rmusawarah::{
-    posts::routes::{create_post, get_post, get_posts_cursor},
+    chapters::routes::create_chapter,
+    comics::routes::{create_comic, get_comic, get_comics_cursor},
     s3::helpers::setup_storage,
-    users::routes::{create_user, get_user, get_user_posts, login},
+    users::routes::{create_user, get_user, get_user_comics, login},
     ApiDoc, AppState,
 };
 use sqlx::postgres::PgPoolOptions;
@@ -58,15 +59,19 @@ async fn main() {
         .route("/", get(get_user))
         .route("/", post(create_user))
         .route("/login", post(login))
-        .route("/:username", get(get_user_posts));
+        .route("/:username", get(get_user_comics));
 
-    let posts_router = Router::new()
-        .route("/", post(create_post))
-        .layer(DefaultBodyLimit::disable())
-        // TODO: image compression
-        .layer(RequestBodyLimitLayer::new(5 * 1024 * 1024 /* 5mb */))
-        .route("/", get(get_posts_cursor))
-        .route("/:username/:post_id", get(get_post));
+    let comics_router = Router::new()
+        .route("/", post(create_comic))
+        .route("/", get(get_comics_cursor))
+        .route("/:comic_id", get(get_comic));
+
+    let chapters_router = Router::new().route("/", post(create_chapter));
+    // .layer(DefaultBodyLimit::disable())
+    // TODO: image compression
+    // .layer(RequestBodyLimitLayer::new(5 * 1024 * 1024 /* 5mb */))
+    // .route("/", get(get_comics_cursor))
+    // .route("/:comic_id/:chapter_num", get(get_chapter));
 
     let cors = CorsLayer::new()
         .allow_methods([Method::GET, Method::POST])
@@ -76,8 +81,9 @@ async fn main() {
     let app = Router::new()
         .merge(SwaggerUi::new("/swagger-ui").url("/api-doc/openapi.json", ApiDoc::openapi()))
         .route("/", get(root))
-        .nest("/api/users", user_router)
-        .nest("/api/posts", posts_router)
+        .nest("/api/v1/users", user_router)
+        .nest("/api/v1/comics", comics_router)
+        .nest("/api/v1/chapters", chapters_router)
         .layer(TraceLayer::new_for_http())
         .layer(cors)
         .with_state(app_state);

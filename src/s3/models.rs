@@ -1,5 +1,6 @@
 use uuid::Uuid;
 
+#[allow(dead_code)]
 pub struct Image {
     id: Uuid,
     user_id: Uuid,

@@ -10,8 +10,9 @@ use utoipa::{
 };
 use uuid::Uuid;
 
+pub mod chapters;
+pub mod comics;
 pub mod middlewares;
-pub mod posts;
 pub mod s3;
 pub mod users;
 
@@ -28,17 +29,18 @@ pub static JWT_KEY: Lazy<HS256Key> = Lazy::new(|| HS256Key::generate());
     paths(
         users::routes::create_user,
         users::routes::login,
-        users::routes::get_user_posts,
+        users::routes::get_user_comics,
         users::routes::get_user,
-        posts::routes::create_post,
-        posts::routes::get_post,
-        posts::routes::get_posts_cursor,
+        comics::routes::create_comic,
+        comics::routes::get_comic,
+        comics::routes::get_comics_cursor,
     ),
     components(
-        schemas(posts::models::CreatePost),
-        schemas(posts::models::PostData),
-        schemas(posts::models::PostResponse),
-        schemas(posts::models::ImageResponse),
+        schemas(comics::models::CreateComic),
+        schemas(comics::models::ComicResponse),
+        schemas(comics::models::ImageResponse),
+        schemas(chapters::models::ChapterResponse),
+        schemas(chapters::models::ChapterPageResponse),
         schemas(users::models::UserResponse),
         schemas(users::models::UserClaims),
         schemas(users::models::CreateUser),
@@ -49,7 +51,7 @@ pub static JWT_KEY: Lazy<HS256Key> = Lazy::new(|| HS256Key::generate());
     modifiers(&SecurityAddon),
     tags(
         (name = "Users API"),
-        (name = "Posts API")
+        (name = "Comics API")
     )
 )]
 

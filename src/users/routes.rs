@@ -12,7 +12,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::{
-    posts::models::{ImageResponse, PostResponse},
+    comics::models::{ComicResponse, ImageResponse},
     PaginationParams, JWT_KEY,
 };
 
@@ -24,7 +24,7 @@ use super::{
 /// Create User
 #[utoipa::path(
     post,
-    path = "/api/users/",
+    path = "/api/v1/users/",
     request_body(content = CreateUser, description = "Username, Email, and password", content_type = "application/json"),
     responses(
         (status = 200, description = "User successfully created", body = UserResponse),
@@ -125,7 +125,7 @@ FROM user_insert, profile_image_insert
 /// User login
 #[utoipa::path(
     post,
-    path = "/api/users/login",
+    path = "/api/v1/users/login",
     request_body(content = UserLogin, description = "Email and password", content_type = "application/json"),
     responses(
         (status = 200, description = "User authenticated", body = UserToken),
@@ -201,15 +201,15 @@ WHERE email = $1;
     }))
 }
 
-/// Get user posts by username
+/// Get user comics by username
 #[utoipa::path(
     get,
-    path = "/api/users/{username}",
+    path = "/api/v1/users/{username}",
     params(
         PaginationParams
     ),
     responses(
-        (status = 200, description = "Caller authorized. returned requested user's posts", body = [PostResponse]),
+        (status = 200, description = "Caller authorized. returned requested user's comics", body = [PostResponse]),
         (status = StatusCode::UNAUTHORIZED, description = "Caller unauthorized", body = ErrorHandlingResponse),
         (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
     ),
@@ -218,14 +218,14 @@ WHERE email = $1;
     ),
     tag = "Users API"
 )]
-pub async fn get_user_posts(
+pub async fn get_user_comics(
     // prevent non logged users from
     // accessing a specific user's posts
     _: UserClaims,
     State(db): State<PgPool>,
     Path(username): Path<String>,
     Query(pagination): Query<PaginationParams>,
-) -> Result<Json<Vec<PostResponse>>, UsersError> {
+) -> Result<Json<Vec<ComicResponse>>, UsersError> {
     // make sure requested user exists
     sqlx::query!(
         r#"
@@ -245,24 +245,24 @@ WHERE username = $1
 
     let records = sqlx::query!(
         r#"
-SELECT users.id AS user_id, posts.id AS post_id,
+SELECT users.id AS user_id, comics.id AS comic_id,
 users.displayname, users.username, users.email,
-posts.content, posts.title, posts.created_at,
+comics.description, comics.title, comics.created_at,
 images.path AS post_image_path,
 images.content_type AS post_image_content_type, images.id AS image_id,
 profile_images.content_type AS profile_image_content_type,
 profile_images.path AS profile_image_path,
 profile_images.id AS profile_image_id
 
-FROM posts
+FROM comics
 INNER JOIN users
-ON users.id = posts.author_id
+ON users.id = comics.author_id
 INNER JOIN images
-ON posts.id = images.post_id
+ON comics.id = images.comic_id
 INNER JOIN profile_images
 ON users.id = profile_images.user_id
 
-WHERE username = $1 AND posts.id > $2 AND posts.id < $3
+WHERE username = $1 AND comics.id > $2 AND comics.id < $3
 
 LIMIT 10
         "#,
@@ -277,12 +277,12 @@ LIMIT 10
 
     let posts = records
         .into_iter()
-        .map(|r| PostResponse {
-            id: r.post_id,
+        .map(|r| ComicResponse {
+            id: r.comic_id,
             title: r.title,
-            content: r.content,
+            description: r.description,
             created_at: r.created_at.to_string(),
-            user: UserResponse {
+            author: UserResponse {
                 id: r.user_id,
                 displayname: r.displayname,
                 username: r.username,
@@ -292,12 +292,9 @@ LIMIT 10
                     content_type: r.profile_image_content_type,
                 },
             },
-            image: ImageResponse {
-                content_type: r.post_image_content_type,
-                path: r.post_image_path,
-            },
+            chapters: vec![],
         })
-        .collect::<Vec<PostResponse>>();
+        .collect::<Vec<ComicResponse>>();
 
     if posts.len() == 0 {
         return Err(UsersError::HasNoPosts);
@@ -309,7 +306,7 @@ LIMIT 10
 /// Get user details by token
 #[utoipa::path(
     get,
-    path = "/api/users/",
+    path = "/api/v1/users/",
     responses(
         (status = 200, description = "Caller authorized. returned current user info", body = UserClaims),
         (status = StatusCode::UNAUTHORIZED, description = "Caller unauthorized", body = ErrorHandlingResponse ),
