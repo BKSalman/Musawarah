@@ -54,6 +54,10 @@
             alias find=fd
             alias cat=bat
 
+            # run dev servers
+            alias lcr='RUST_LOG=debug cargo run'
+            alias npmd='pnpm run dev'
+
             # start dev database if available, if not create, and run it on port 5445
             docker start musawarah-dev || \
               docker run \
