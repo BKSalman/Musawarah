@@ -1,10 +1,10 @@
 -- Add migration script here
 CREATE TABLE IF NOT EXISTS users (
     id uuid PRIMARY KEY NOT NULL,
-    username VARCHAR ( 150 ) UNIQUE NOT NULL,
-    displayname VARCHAR ( 150 ) NOT NULL,
-    password VARCHAR ( 150 ) NOT NULL,
-    email VARCHAR ( 500 ) UNIQUE NOT NULL,
+    username TEXT UNIQUE NOT NULL,
+    displayname TEXT NOT NULL,
+    password TEXT NOT NULL,
+    email TEXT UNIQUE NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT now(),
-    last_login TIMESTAMP 
+    last_login TIMESTAMP
 );
