@@ -1,5 +1,7 @@
 <script lang="ts">
     import Text from "$lib/components/Text.svelte";
+    import Fa from "svelte-fa";
+    import { faHome } from "@fortawesome/free-solid-svg-icons";
 
     export let open: boolean;
 </script>
@@ -7,23 +9,9 @@
 <nav class:expanded={open}>
     <ul>
         <li>
-            <a href="/"
-                >🚀 {#if open}<Text fontSize="xl" --margin="0 0 0 1rem"
-                        >lmao</Text
-                    >{/if}</a
-            >
-        </li>
-        <li>
-            <a href="/"
-                >🚀 {#if open}<Text fontSize="xl" --margin="0 0 0 1rem"
-                        >lmao</Text
-                    >{/if}</a
-            >
-        </li>
-        <li>
-            <a href="/"
-                >🚀 {#if open}<Text fontSize="xl" --margin="0 0 0 1rem"
-                        >lmao</Text
+            <a class="link" href="/"
+                ><Fa size="1.5x" icon={faHome} />
+                {#if open}<Text fontSize="xl" --margin="0 0 0 1rem">Home</Text
                     >{/if}</a
             >
         </li>
@@ -46,7 +34,7 @@
 
     ul {
         list-style: none;
-        padding: 20px 15px 15px 20px;
+        padding: 20px 15px 15px 15px;
         margin: 0;
     }
 
@@ -57,6 +45,6 @@
 
     a {
         display: flex;
-        line-height: 1rem;
+        line-height: 1.5rem;
     }
 </style>
