@@ -1,13 +1,13 @@
 <script lang="ts">
-  import type { PostResponse } from "../../../../bindings/PostResponse";
+  import type { ComicResponseBrief } from "../../../../bindings/ComicResponseBrief";
   import GalleryItem from "./GalleryItem.svelte";
 
-  export let posts: PostResponse[];
+  export let comics: ComicResponseBrief[] | null;
 </script>
 
 <div class="gallery">
-  {#each posts as post}
-    <GalleryItem {post} />
+  {#each comics || [] as comic}
+    <GalleryItem {comic} />
   {/each}
 </div>
 

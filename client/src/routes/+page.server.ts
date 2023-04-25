@@ -1,8 +1,8 @@
-import type { PostResponse } from '../../../bindings/PostResponse';
+import type { ComicResponseBrief } from '../../../bindings/ComicResponseBrief';
 import type { PageServerData } from './$types';
 
 export async function load({fetch}) {
-    const res = await fetch("http://127.0.0.1:6060/api/posts");
+    const res = await fetch("http://127.0.0.1:6060/api/v1/comics");
 
     if (res.status != 200) {
         return {
@@ -11,9 +11,9 @@ export async function load({fetch}) {
         };
     }
 
-    const data: PostResponse[] = await res.json();
+    const data: ComicResponseBrief[] = await res.json();
 
     return {
-        posts: data
+        comics: data
     };
 }

@@ -1,14 +1,10 @@
 <script lang="ts">
-  import type { PostResponse } from "../../../../bindings/PostResponse";
+  import type { ComicResponseBrief } from "../../../../bindings/ComicResponseBrief";
 
-  export let post: PostResponse;
+  export let comic: ComicResponseBrief;
 </script>
 
-<a class="gallery-item" href={`/${post.user.username}/${post.id}`}>
-  <img
-    src={`https://pub-57f47fc2081648efaa3f351802d15c5d.r2.dev/${post.image.path}`}
-    alt=""
-  />
+<a class="gallery-item" href={`/${comic.id}`}>
 </a>
 
 <style>
