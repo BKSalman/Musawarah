@@ -12,7 +12,7 @@ pub enum ComicsError {
     InternalServerError,
 
     #[error("post not found")]
-    PostNotFound,
+    ComicNotFound,
 
     #[error("bad request")]
     BadRequest,
@@ -24,7 +24,7 @@ pub enum ComicsError {
     JWT(#[from] jwt_simple::Error),
 
     #[error("sqlx internal server error")]
-    Sqlx(#[from] sqlx::Error),
+    SeaORM(#[from] sea_orm::DbErr),
 
     // #[error("validation error: {0}")]
     // Validator(#[from] validator::ValidationErrors),
@@ -37,11 +37,11 @@ impl IntoResponse for ComicsError {
         tracing::debug!("{}", self.to_string());
 
         let (status, error_message) = match self {
-            ComicsError::PostNotFound => (StatusCode::NOT_FOUND, vec![self.to_string()]),
+            ComicsError::ComicNotFound => (StatusCode::NOT_FOUND, vec![self.to_string()]),
             ComicsError::BadRequest => (StatusCode::BAD_REQUEST, vec![self.to_string()]),
             ComicsError::ImageTooLarge => (StatusCode::BAD_REQUEST, vec![self.to_string()]),
             ComicsError::Conflict(_) => (StatusCode::CONFLICT, vec![self.to_string()]),
-            ComicsError::Sqlx(_) => (StatusCode::INTERNAL_SERVER_ERROR, vec![self.to_string()]),
+            ComicsError::SeaORM(_) => (StatusCode::INTERNAL_SERVER_ERROR, vec![self.to_string()]),
             ComicsError::InternalServerError => {
                 (StatusCode::INTERNAL_SERVER_ERROR, vec![self.to_string()])
             }

@@ -2,8 +2,8 @@ use axum::{extract::FromRef, response::IntoResponse};
 use jwt_simple::prelude::HS256Key;
 use once_cell::sync::Lazy;
 use s3::interface::Storage;
+use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
 use utoipa::{
     openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme},
     IntoParams, Modify, OpenApi, ToSchema,
@@ -12,13 +12,14 @@ use uuid::Uuid;
 
 pub mod chapters;
 pub mod comics;
+pub mod entity;
 pub mod middlewares;
 pub mod s3;
 pub mod users;
 
 #[derive(Clone, FromRef)]
 pub struct AppState {
-    pub db: PgPool,
+    pub db: DatabaseConnection,
     pub storage: Storage,
 }
 
@@ -51,7 +52,8 @@ pub static JWT_KEY: Lazy<HS256Key> = Lazy::new(|| HS256Key::generate());
     modifiers(&SecurityAddon),
     tags(
         (name = "Users API"),
-        (name = "Comics API")
+        (name = "Comics API"),
+        (name = "Chapters API"),
     )
 )]
 

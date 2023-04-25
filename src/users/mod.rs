@@ -26,7 +26,7 @@ pub enum UsersError {
     JWT(#[from] jwt_simple::Error),
 
     #[error("internal server error")]
-    Sqlx(#[from] sqlx::Error),
+    SeaORM(#[from] sea_orm::error::DbErr),
 
     #[error("internal server error")]
     Argon2(#[from] argon2::password_hash::Error),
@@ -73,7 +73,7 @@ impl IntoResponse for UsersError {
                     errors: vec![self.to_string()],
                 },
             ),
-            UsersError::Sqlx(_) => (
+            UsersError::SeaORM(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 ErrorHandlingResponse {
                     errors: vec![self.to_string()],

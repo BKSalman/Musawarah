@@ -3,6 +3,8 @@ pub mod routes;
 mod utils;
 
 use axum::{http::StatusCode, response::IntoResponse, Json};
+use sea_orm::TransactionError;
+use std::error::Error as StdError;
 // use tracing::debug;
 
 use crate::ErrorHandlingResponse;
@@ -24,13 +26,25 @@ pub enum ChaptersError {
     #[error("jwt internal server error")]
     JWT(#[from] jwt_simple::Error),
 
-    #[error("sqlx internal server error")]
-    Sqlx(#[from] sqlx::Error),
+    #[error("sea_orm internal server error")]
+    SeaORM(#[from] sea_orm::error::DbErr),
 
     // #[error("validation error: {0}")]
     // Validator(#[from] validator::ValidationErrors),
     #[error("{0}")]
     Conflict(String),
+}
+
+impl<E> From<TransactionError<E>> for ChaptersError
+where
+    E: StdError + Into<ChaptersError>,
+{
+    fn from(err: TransactionError<E>) -> Self {
+        match err {
+            TransactionError::Connection(db) => Self::SeaORM(db),
+            TransactionError::Transaction(err) => err.into(),
+        }
+    }
 }
 
 impl IntoResponse for ChaptersError {
@@ -42,7 +56,7 @@ impl IntoResponse for ChaptersError {
             ChaptersError::BadRequest => (StatusCode::BAD_REQUEST, vec![self.to_string()]),
             ChaptersError::ImageTooLarge => (StatusCode::BAD_REQUEST, vec![self.to_string()]),
             ChaptersError::Conflict(_) => (StatusCode::CONFLICT, vec![self.to_string()]),
-            ChaptersError::Sqlx(_) => (StatusCode::INTERNAL_SERVER_ERROR, vec![self.to_string()]),
+            ChaptersError::SeaORM(_) => (StatusCode::INTERNAL_SERVER_ERROR, vec![self.to_string()]),
             ChaptersError::InternalServerError => {
                 (StatusCode::INTERNAL_SERVER_ERROR, vec![self.to_string()])
             }

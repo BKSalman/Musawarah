@@ -34,6 +34,15 @@ pub struct UserResponse {
     pub profile_image: ImageResponse,
 }
 
+#[derive(Debug, Serialize, Deserialize, ToSchema, TS)]
+#[ts(export)]
+pub struct UserResponseBrief {
+    pub id: Uuid,
+    pub displayname: String,
+    pub username: String,
+    pub email: String,
+}
+
 #[derive(Debug, Deserialize, Serialize, ToSchema, TS)]
 pub struct UserClaims {
     pub user: UserResponse,

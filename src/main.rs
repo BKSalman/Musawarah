@@ -8,14 +8,13 @@ use axum::{
     Router,
 };
 use dotenv::dotenv;
-use rmusawarah::{
-    chapters::routes::create_chapter,
+use musawarah::{
+    chapters::routes::{create_chapter, create_chapter_page, get_chapter, get_chapters_cursor},
     comics::routes::{create_comic, get_comic, get_comics_cursor},
     s3::helpers::setup_storage,
     users::routes::{create_user, get_user, get_user_comics, login},
     ApiDoc, AppState,
 };
-use sqlx::postgres::PgPoolOptions;
 use std::{
     env,
     net::{Ipv4Addr, SocketAddr},
@@ -44,34 +43,34 @@ async fn main() {
 
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL env variable");
 
-    let pool = PgPoolOptions::new()
-        .max_connections(5)
-        .connect(&database_url)
+    let db = sea_orm::Database::connect(database_url)
         .await
-        .expect("db connection");
+        .expect("Database connection");
 
     let app_state = AppState {
-        db: pool,
+        db,
         storage: setup_storage().expect("storage"),
     };
 
     let user_router = Router::new()
-        .route("/", get(get_user))
+        .route("/:user_id", get(get_user))
         .route("/", post(create_user))
         .route("/login", post(login))
-        .route("/:username", get(get_user_comics));
+        .route("/comics/:username", get(get_user_comics));
 
     let comics_router = Router::new()
         .route("/", post(create_comic))
         .route("/", get(get_comics_cursor))
         .route("/:comic_id", get(get_comic));
 
-    let chapters_router = Router::new().route("/", post(create_chapter));
-    // .layer(DefaultBodyLimit::disable())
-    // TODO: image compression
-    // .layer(RequestBodyLimitLayer::new(5 * 1024 * 1024 /* 5mb */))
-    // .route("/", get(get_comics_cursor))
-    // .route("/:comic_id/:chapter_num", get(get_chapter));
+    let chapters_router = Router::new()
+        .route("/", post(create_chapter))
+        .route("/page", post(create_chapter_page))
+        .layer(DefaultBodyLimit::disable())
+        // TODO: image compression
+        .layer(RequestBodyLimitLayer::new(5 * 1024 * 1024 /* 5mb */))
+        .route("/:comic_id", get(get_chapters_cursor))
+        .route("/s/:chapter_id", get(get_chapter));
 
     let cors = CorsLayer::new()
         .allow_methods([Method::GET, Method::POST])

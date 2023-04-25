@@ -6,25 +6,31 @@ use axum::{
     extract::{Path, Query, State},
     Json,
 };
+use chrono::Utc;
 use garde::Validate;
+use itertools::multizip;
 use jwt_simple::prelude::*;
-use sqlx::PgPool;
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, IntoActiveModel, LoaderTrait,
+    ModelTrait, QueryFilter, QuerySelect,
+};
 use uuid::Uuid;
 
 use crate::{
-    comics::models::{ComicResponse, ImageResponse},
-    PaginationParams, JWT_KEY,
+    chapters::models::ChapterResponseBrief,
+    comics::models::{ComicResponseBrief, ImageResponse},
+    entity, AppState, PaginationParams, JWT_KEY,
 };
 
 use super::{
-    models::{CreateUser, UserClaims, UserLogin, UserResponse, UserToken},
+    models::{CreateUser, UserClaims, UserLogin, UserResponse, UserResponseBrief, UserToken},
     UsersError,
 };
 
 /// Create User
 #[utoipa::path(
     post,
-    path = "/api/v1/users/",
+    path = "/api/v1/users",
     request_body(content = CreateUser, description = "Username, Email, and password", content_type = "application/json"),
     responses(
         (status = 200, description = "User successfully created", body = UserResponse),
@@ -34,19 +40,15 @@ use super::{
     tag = "Users API"
 )]
 pub async fn create_user(
-    State(db): State<PgPool>,
+    State(state): State<AppState>,
     Json(payload): Json<CreateUser>,
-) -> Result<Json<UserResponse>, UsersError> {
+) -> Result<Json<Uuid>, UsersError> {
     payload.validate(&())?;
-
     if payload.username.is_empty() || payload.password.is_empty() || payload.email.is_empty() {
         return Err(UsersError::BadRequest);
     }
 
-    let salt = SaltString::new("somethingsomething").map_err(|err| {
-        tracing::debug!("salt string error: {:#?}", err);
-        UsersError::InternalServerError
-    })?;
+    let salt = SaltString::generate(rand::thread_rng());
 
     // argon2 is a good algorithm (not a security expert :))
     let argon2 = Argon2::default();
@@ -55,71 +57,47 @@ pub async fn create_user(
         .hash_password(payload.password.as_bytes(), &salt)?
         .to_string();
 
-    // v7 uuid allows for easier sorting
-    let user_id = Uuid::now_v7();
+    let user = entity::users::Model {
+        id: Uuid::now_v7(),
+        username: payload.username.to_lowercase(),
+        // TODO: why do I need to clone this?
+        displayname: payload.username.clone(),
+        email: payload.email.clone(),
+        password: hashed_password,
+        created_at: Utc::now().naive_utc(),
+        last_login: None,
+    }
+    .into_active_model()
+    .insert(&state.db)
+    .await?;
 
-    let record = sqlx::query!(
-        r#"
-WITH user_insert AS (
-    INSERT INTO users ( id, username, displayname, email, password )
-    VALUES ( $1, $2, $3, $4, $5 )
+    let _profile_image = entity::profile_images::Model {
+        id: Uuid::now_v7(),
+        user_id: user.id,
+        path: String::from("ppL.webp"),
+        content_type: String::from("image/webp"),
+    }
+    .into_active_model()
+    .insert(&state.db)
+    .await?;
 
-    RETURNING *
-),
-profile_image_insert AS (
-    INSERT INTO profile_images ( id, path, content_type, user_id )
-    VALUES ( $6, $7, $8, $9 )
+    //     .map_err(|e| match e {
+    //         sqlx::Error::Database(dbe) => match dbe.constraint() {
+    //             Some("users_username_key") => UsersError::Conflict("username taken".into()),
+    //             Some("users_email_key") => UsersError::Conflict("email taken".into()),
+    //             _ => {
+    //                 tracing::debug!("create_user db error: {:#?}", dbe);
+    //                 UsersError::InternalServerError
+    //             }
+    //         },
+    //         _ => {
+    //             // TODO: log this instead of printing
+    //             tracing::debug!("{e:#?}");
+    //             UsersError::InternalServerError
+    //         }
+    //     })?;
 
-    RETURNING *
-)
-SELECT user_insert.id AS user_id, user_insert.username,
-user_insert.displayname, user_insert.email,
-profile_image_insert.id AS profile_image_id, profile_image_insert.path,
-profile_image_insert.content_type
-
-FROM user_insert, profile_image_insert
-            "#,
-        // v7 uuid allows for easier sorting
-        user_id,
-        payload.username.to_lowercase(),
-        payload.username,
-        payload.email,
-        hashed_password,
-        Uuid::now_v7(),
-        "ppl.png",
-        "image/webp",
-        user_id,
-    )
-    .fetch_one(&db)
-    .await
-    .map_err(|e| match e {
-        sqlx::Error::Database(dbe) => match dbe.constraint() {
-            Some("users_username_key") => UsersError::Conflict("username taken".into()),
-            Some("users_email_key") => UsersError::Conflict("email taken".into()),
-            _ => {
-                tracing::debug!("create_user db error: {:#?}", dbe);
-                UsersError::InternalServerError
-            }
-        },
-        _ => {
-            // TODO: log this instead of printing
-            tracing::debug!("{e:#?}");
-            UsersError::InternalServerError
-        }
-    })?;
-
-    let user = UserResponse {
-        id: record.user_id,
-        displayname: record.displayname,
-        username: record.username,
-        profile_image: ImageResponse {
-            path: record.path,
-            content_type: record.content_type,
-        },
-        email: record.email,
-    };
-
-    Ok(Json(user))
+    Ok(Json(user.id))
 }
 
 /// User login
@@ -135,40 +113,48 @@ FROM user_insert, profile_image_insert
     tag = "Users API"
 )]
 pub async fn login(
-    State(db): State<PgPool>,
+    State(db): State<DatabaseConnection>,
     Json(payload): Json<UserLogin>,
 ) -> Result<Json<UserToken>, UsersError> {
+    payload.validate(&())?;
     // argon2 is a good algorithm (not a security expert :))
     let argon2 = Argon2::default();
 
-    let record = sqlx::query!(
-        r#"
-SELECT users.id AS user_id, users.displayname, users.username, users.email, users.password,
-profile_images.path, profile_images.content_type
-FROM users
+    //     let record = sqlx::query!(
+    //         r#"
+    // SELECT users.id AS user_id, users.displayname, users.username, users.email, users.password,
+    // profile_images.path, profile_images.content_type
+    // FROM users
 
-INNER JOIN profile_images
-ON users.id = profile_images.user_id
+    // INNER JOIN profile_images
+    // ON users.id = profile_images.user_id
 
-WHERE email = $1;
-        "#,
-        payload.email,
-    )
-    .fetch_optional(&db)
-    .await
-    // TODO: better error handling
-    .map_err(|error| match error {
-        _ => {
-            tracing::debug!("login db error: {:#?}", error);
-            UsersError::InternalServerError
-        }
-    })?;
+    // WHERE email = $1;
+    //         "#,
+    //         payload.email,
+    //     )
+    //     .fetch_optional(&db)
+    //     .await
+    //     // TODO: better error handling
+    //     .map_err(|error| match error {
+    //         _ => {
+    //             tracing::debug!("login db error: {:#?}", error);
+    //             UsersError::InternalServerError
+    //         }
+    //     })?;
 
-    let Some(record) = record else {
-        return Err(UsersError::UserNotFound);
+    // let Some(record) = record else {
+    //     return Err(UsersError::UserNotFound);
+    // };
+
+    let Some(user) = entity::users::Entity::find()
+        .filter(entity::users::Column::Email.eq(&payload.email))
+        .one(&db)
+        .await? else {
+        return Err(UsersError::InvalidCredentials);
     };
 
-    let parsed_password = PasswordHash::new(&record.password)?;
+    let parsed_password = PasswordHash::new(&user.password)?;
 
     if argon2
         .verify_password(payload.password.as_bytes(), &parsed_password)
@@ -177,16 +163,24 @@ WHERE email = $1;
         return Err(UsersError::InvalidCredentials);
     }
 
+    // TODO: profile image
+    let Some(profile_image) = user
+        .find_related(entity::profile_images::Entity)
+        .one(&db)
+        .await? else {
+        return Err(UsersError::InternalServerError);
+    };
+
     let claims = Claims::with_custom_claims(
         UserClaims {
             user: UserResponse {
-                id: record.user_id,
-                displayname: record.displayname,
-                username: record.username,
-                email: record.email,
+                id: user.id,
+                displayname: user.displayname,
+                username: user.username,
+                email: user.email,
                 profile_image: ImageResponse {
-                    path: record.path,
-                    content_type: record.content_type,
+                    path: profile_image.path,
+                    content_type: profile_image.content_type,
                 },
             },
         },
@@ -204,7 +198,7 @@ WHERE email = $1;
 /// Get user comics by username
 #[utoipa::path(
     get,
-    path = "/api/v1/users/{username}",
+    path = "/api/v1/users/comics/{username}",
     params(
         PaginationParams
     ),
@@ -222,91 +216,66 @@ pub async fn get_user_comics(
     // prevent non logged users from
     // accessing a specific user's posts
     _: UserClaims,
-    State(db): State<PgPool>,
+    State(db): State<DatabaseConnection>,
     Path(username): Path<String>,
     Query(pagination): Query<PaginationParams>,
-) -> Result<Json<Vec<ComicResponse>>, UsersError> {
-    // make sure requested user exists
-    sqlx::query!(
-        r#"
-SELECT users.username
+) -> Result<Json<Vec<ComicResponseBrief>>, UsersError> {
+    let Some(user) = entity::users::Entity::find()
+        .filter(entity::users::Column::Username.eq(username))
+        .one(&db)
+        .await? else {
+        return Err(UsersError::UserNotFound);
+    };
 
-FROM users
+    // FIXME: query comics, chapters, and chapter pages in same query
+    // or 2 separate queries
 
-WHERE username = $1
-        "#,
-        username,
-    )
-    .fetch_optional(&db)
-    .await
-    // TODO: better error handling
-    .map_err(|_| UsersError::UserNotFound)?
-    .ok_or(UsersError::UserNotFound)?;
+    let comics = user
+        .find_related(entity::comics::Entity)
+        // .find_with_related(entity::chapters::Entity)
+        .filter(entity::comics::Column::Id.gt(pagination.min_id))
+        .filter(entity::comics::Column::Id.lt(pagination.max_id))
+        // TODO: determine a good limit
+        .limit(Some(10))
+        .all(&db)
+        .await?;
 
-    let records = sqlx::query!(
-        r#"
-SELECT users.id AS user_id, comics.id AS comic_id,
-users.displayname, users.username, users.email,
-comics.description, comics.title, comics.created_at,
-images.path AS post_image_path,
-images.content_type AS post_image_content_type, images.id AS image_id,
-profile_images.content_type AS profile_image_content_type,
-profile_images.path AS profile_image_path,
-profile_images.id AS profile_image_id
+    let chapters = comics.load_many(entity::chapters::Entity, &db).await?;
+    let users = comics.load_one(entity::users::Entity, &db).await?;
 
-FROM comics
-INNER JOIN users
-ON users.id = comics.author_id
-INNER JOIN images
-ON comics.id = images.comic_id
-INNER JOIN profile_images
-ON users.id = profile_images.user_id
-
-WHERE username = $1 AND comics.id > $2 AND comics.id < $3
-
-LIMIT 10
-        "#,
-        username,
-        pagination.min_id,
-        pagination.max_id,
-    )
-    .fetch_all(&db)
-    .await
-    // TODO: better error handling
-    .map_err(|_| UsersError::UserNotFound)?;
-
-    let posts = records
-        .into_iter()
-        .map(|r| ComicResponse {
-            id: r.comic_id,
-            title: r.title,
-            description: r.description,
-            created_at: r.created_at.to_string(),
-            author: UserResponse {
-                id: r.user_id,
-                displayname: r.displayname,
-                username: r.username,
-                email: r.email,
-                profile_image: ImageResponse {
-                    path: r.profile_image_path,
-                    content_type: r.profile_image_content_type,
+    let comics: Result<Vec<ComicResponseBrief>, UsersError> = multizip((comics, chapters, users))
+        .map(|(comic, chapters, user)| {
+            let user = user.ok_or(UsersError::InternalServerError)?;
+            Ok(ComicResponseBrief {
+                id: comic.id,
+                author: UserResponseBrief {
+                    id: user.id,
+                    displayname: user.displayname,
+                    username: user.username,
+                    email: user.email,
                 },
-            },
-            chapters: vec![],
+                title: comic.title,
+                description: comic.description,
+                created_at: comic.created_at.to_string(),
+                chapters: chapters
+                    .into_iter()
+                    .map(|chapter| ChapterResponseBrief {
+                        id: chapter.id,
+                        description: chapter.description,
+                        number: chapter.number,
+                    })
+                    .collect(),
+            })
         })
-        .collect::<Vec<ComicResponse>>();
+        .collect();
 
-    if posts.len() == 0 {
-        return Err(UsersError::HasNoPosts);
-    }
-
-    Ok(Json(posts))
+    Ok(Json(comics?))
 }
 
-/// Get user details by token
+/// Get user by username
 #[utoipa::path(
     get,
-    path = "/api/v1/users/",
+    path = "/api/v1/users/{user_id}",
     responses(
         (status = 200, description = "Caller authorized. returned current user info", body = UserClaims),
         (status = StatusCode::UNAUTHORIZED, description = "Caller unauthorized", body = ErrorHandlingResponse ),
@@ -317,6 +286,30 @@ LIMIT 10
     ),
     tag = "Users API"
 )]
-pub async fn get_user(claims: UserClaims) -> Result<Json<UserClaims>, UsersError> {
-    Ok(Json(claims))
+pub async fn get_user(
+    State(db): State<DatabaseConnection>,
+    Path(user_id): Path<Uuid>,
+) -> Result<Json<UserResponse>, UsersError> {
+    let Some((user, Some(profile_image))) = entity::users::Entity::find()
+        .filter(entity::users::Column::Id.eq(user_id))
+        .find_also_related(entity::profile_images::Entity)
+        .one(&db)
+        // TODO: handle errors
+        .await? else {
+        tracing::debug!("User not found");
+        return Err(UsersError::UserNotFound);
+    };
+
+    let user = UserResponse {
+        id: user.id,
+        displayname: user.displayname,
+        username: user.username,
+        email: user.email,
+        profile_image: ImageResponse {
+            content_type: profile_image.content_type,
+            path: profile_image.path,
+        },
+    };
+
+    Ok(Json(user))
 }
