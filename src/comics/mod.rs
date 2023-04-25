@@ -11,19 +11,19 @@ pub enum ComicsError {
     #[error("internal server error")]
     InternalServerError,
 
-    #[error("post not found")]
+    #[error("comic not found")]
     ComicNotFound,
 
     #[error("bad request")]
     BadRequest,
 
-    #[error("image size too large, maximum image size is 5MB")]
+    #[error("image size too large, maximum image size is 10MB")]
     ImageTooLarge,
 
-    #[error("jwt internal server error")]
+    #[error("internal server error")]
     JWT(#[from] jwt_simple::Error),
 
-    #[error("sqlx internal server error")]
+    #[error("internal server error")]
     SeaORM(#[from] sea_orm::DbErr),
 
     // #[error("validation error: {0}")]
@@ -41,12 +41,16 @@ impl IntoResponse for ComicsError {
             ComicsError::BadRequest => (StatusCode::BAD_REQUEST, vec![self.to_string()]),
             ComicsError::ImageTooLarge => (StatusCode::BAD_REQUEST, vec![self.to_string()]),
             ComicsError::Conflict(_) => (StatusCode::CONFLICT, vec![self.to_string()]),
-            ComicsError::SeaORM(_) => (StatusCode::INTERNAL_SERVER_ERROR, vec![self.to_string()]),
+            ComicsError::SeaORM(_) => {
+                tracing::error!("seaorm error: {:#?}", self);
+                (StatusCode::INTERNAL_SERVER_ERROR, vec![self.to_string()])
+            }
             ComicsError::InternalServerError => {
+                tracing::error!("internal server error: {:#?}", self);
                 (StatusCode::INTERNAL_SERVER_ERROR, vec![self.to_string()])
             }
             ComicsError::JWT(_) => {
-                // TODO: add logging for this
+                tracing::error!("JWT error: {:#?}", self);
                 (StatusCode::INTERNAL_SERVER_ERROR, vec![self.to_string()])
             }
         };

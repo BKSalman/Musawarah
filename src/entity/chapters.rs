@@ -7,6 +7,7 @@ use sea_orm::entity::prelude::*;
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: Uuid,
+    pub title: Option<String>,
     pub description: Option<String>,
     pub number: i32,
     pub author_id: Uuid,
@@ -24,7 +25,7 @@ pub enum Relation {
         from = "Column::ComicId",
         to = "super::comics::Column::Id",
         on_update = "NoAction",
-        on_delete = "NoAction"
+        on_delete = "Cascade"
     )]
     Comics,
     #[sea_orm(
@@ -32,7 +33,7 @@ pub enum Relation {
         from = "Column::AuthorId",
         to = "super::users::Column::Id",
         on_update = "NoAction",
-        on_delete = "NoAction"
+        on_delete = "Cascade"
     )]
     Users,
 }

@@ -16,6 +16,7 @@ impl MigrationTrait for Migration {
                     .table(Chapters::Table)
                     .if_not_exists()
                     .col(ColumnDef::new(Chapters::Id).uuid().not_null().primary_key())
+                    .col(ColumnDef::new(Chapters::Title).string())
                     .col(ColumnDef::new(Chapters::Description).string())
                     .col(ColumnDef::new(Chapters::Number).integer().not_null())
                     .col(ColumnDef::new(Chapters::AuthorId).uuid().not_null())
@@ -26,13 +27,15 @@ impl MigrationTrait for Migration {
                         ForeignKey::create()
                             .name("fk-chapters-author_id")
                             .from(Chapters::Table, Chapters::AuthorId)
-                            .to(Users::Table, Users::Id),
+                            .to(Users::Table, Users::Id)
+                            .on_delete(ForeignKeyAction::Cascade),
                     )
                     .foreign_key(
                         ForeignKey::create()
                             .name("fk-chapters-comic_id")
                             .from(Chapters::Table, Chapters::ComicId)
-                            .to(Comics::Table, Comics::Id),
+                            .to(Comics::Table, Comics::Id)
+                            .on_delete(ForeignKeyAction::Cascade),
                     )
                     .index(
                         Index::create()
@@ -64,4 +67,5 @@ pub enum Chapters {
     AuthorId,
     CreatedAt,
     UpdatedAt,
+    Title,
 }

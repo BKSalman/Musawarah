@@ -29,9 +29,16 @@ impl From<entity::chapters::Model> for ChapterResponseBrief {
 #[derive(Deserialize, ToSchema, Debug)]
 pub struct CreateChapter {
     pub comic_id: Uuid,
-    pub title: String,
+    pub title: Option<String>,
     pub description: Option<String>,
     pub number: i32,
+}
+
+#[derive(Deserialize, ToSchema, Debug)]
+pub struct UpdateChapter {
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub number: Option<i32>,
 }
 
 #[derive(Serialize, Deserialize, ToSchema, TS, Debug)]

@@ -8,8 +8,9 @@ use chrono::Utc;
 use futures::{FutureExt, TryStreamExt};
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, IntoActiveModel, QueryFilter,
-    QuerySelect, TransactionTrait,
+    QuerySelect, Set, TransactionTrait,
 };
+use serde_json::json;
 use tempfile::tempfile;
 use tokio::{
     fs::File,
@@ -19,7 +20,7 @@ use tokio_util::io::ReaderStream;
 
 use crate::{
     comics::models::ImageResponse,
-    entity,
+    entity::{self, chapter_pages::Entity as ChapterPage, chapters::Entity as Chapter},
     s3::{interface::Storage, Upload},
     users::models::UserClaims,
     PaginationParams,
@@ -28,6 +29,7 @@ use crate::{
 use super::{
     models::{
         ChapterPageData, ChapterPageResponse, ChapterResponse, ChapterResponseBrief, CreateChapter,
+        UpdateChapter,
     },
     utils::box_error,
     ChaptersError,
@@ -60,6 +62,7 @@ pub async fn create_chapter(
         author_id: user_claims.user.id,
         comic_id: payload.comic_id,
         number: payload.number,
+        title: payload.title,
         description: payload.description,
         created_at: current_date,
         updated_at: current_date,
@@ -110,9 +113,10 @@ pub async fn create_chapter(
     Ok(Json(chapter.into()))
 }
 
+/// Create a chapter page
 #[utoipa::path(
     post,
-    path = "/api/v1/chapters",
+    path = "/api/v1/chapters/page",
     request_body(content = CreateChapterPage, content_type = "multipart/form-data"),
     responses(
         (status = 200, description = "Chapter page successfully created", body = ChapterResponse),
@@ -310,7 +314,6 @@ pub async fn create_chapter_page(
     ),
     responses(
         (status = 200, description = "Get chapters of specified comic", body = [ChapterResponse]),
-        (status = StatusCode::NOT_FOUND, description = "Specified chapter not found", body = ErrorHandlingResponse),
         (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
     ),
     tag = "Chapters API"
@@ -353,6 +356,17 @@ pub async fn get_chapters_cursor(
     Ok(Json(chapters))
 }
 
+/// Get chapter of a comic
+#[utoipa::path(
+    get,
+    path = "/api/v1/chapters/s/{chapter_id}",
+    responses(
+        (status = 200, description = "Get chapter", body = ChapterResponse),
+        (status = StatusCode::NOT_FOUND, description = "Specified chapter not found", body = ErrorHandlingResponse),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
+    ),
+    tag = "Chapters API"
+)]
 pub async fn get_chapter(
     State(db): State<DatabaseConnection>,
     Path(chapter_id): Path<Uuid>,
@@ -388,4 +402,97 @@ pub async fn get_chapter(
     };
 
     Ok(Json(chapter))
+}
+
+/// Update chapter
+#[utoipa::path(
+    put,
+    path = "/api/v1/chapters/{chapter_id}",
+    request_body(content = UpdateComic, content_type = "application/json"),
+    responses(
+        (status = 200, description = "Specified comic has been successfully updated", body = Uuid),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
+    ),
+    tag = "Chapters API"
+)]
+pub async fn update_chapter(
+    State(db): State<DatabaseConnection>,
+    Path(chapter_id): Path<Uuid>,
+    Json(payload): Json<UpdateChapter>,
+) -> Result<Json<Uuid>, ChaptersError> {
+    let Some(chapter) = Chapter::find_by_id(chapter_id).one(&db).await? else {
+        tracing::error!("Chapter not found: {}", chapter_id);
+        return Err(ChaptersError::ChapterNotFound);
+    };
+
+    let mut chapter = chapter.into_active_model();
+
+    if let Some(title) = payload.title {
+        chapter.title = Set(Some(title));
+    }
+
+    if let Some(description) = payload.description {
+        chapter.description = Set(Some(description));
+    }
+
+    if let Some(number) = payload.number {
+        chapter.number = Set(number);
+    }
+
+    let chapter = chapter.update(&db).await?;
+    // TODO: error handling
+
+    Ok(Json(chapter.id))
+}
+
+/// Delete chapter
+#[utoipa::path(
+    delete,
+    path = "/api/v1/chapters/{chapter_id}",
+    responses(
+        (status = 200, description = "Specified comic has been successfully deleted"),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
+    ),
+    tag = "Chapters API"
+)]
+pub async fn delete_chapter(
+    State(db): State<DatabaseConnection>,
+    Path(chapter_id): Path<Uuid>,
+) -> Result<Json<serde_json::Value>, ChaptersError> {
+    let res = Chapter::delete_by_id(chapter_id).exec(&db).await?;
+
+    if res.rows_affected < 1 {
+        tracing::error!("Chapter not found: {}", chapter_id);
+        return Err(ChaptersError::ChapterNotFound);
+    }
+
+    Ok(Json(json!({
+        "message": format!("deleted {} chapters", res.rows_affected)
+    })))
+}
+
+/// Delete chapter page
+#[utoipa::path(
+    delete,
+    path = "/api/v1/chapters/page/{chapter_page_id}",
+    responses(
+        (status = 200, description = "Specified chapter page has been successfully deleted"),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
+    ),
+    tag = "Chapters API"
+)]
+pub async fn delete_chapter_page(
+    State(db): State<DatabaseConnection>,
+    Path(chapter_page_id): Path<Uuid>,
+) -> Result<Json<serde_json::Value>, ChaptersError> {
+    let res = ChapterPage::delete_by_id(chapter_page_id).exec(&db).await?;
+
+    if res.rows_affected < 1 {
+        tracing::error!("Chapter page not found: {}", chapter_page_id);
+        return Err(ChaptersError::ChapterNotFound);
+    }
+
+    Ok(Json(json!({
+        "message": format!("deleted {} chapter pages", res.rows_affected)
+    })))
 }

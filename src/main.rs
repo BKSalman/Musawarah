@@ -64,11 +64,11 @@ async fn main() {
         .route("/:comic_id", get(get_comic));
 
     let chapters_router = Router::new()
-        .route("/", post(create_chapter))
-        .route("/page", post(create_chapter_page))
         .layer(DefaultBodyLimit::disable())
         // TODO: image compression
-        .layer(RequestBodyLimitLayer::new(5 * 1024 * 1024 /* 5mb */))
+        .layer(RequestBodyLimitLayer::new(10 * 1024 * 1024 /* 10mb */))
+        .route("/", post(create_chapter))
+        .route("/page", post(create_chapter_page))
         .route("/:comic_id", get(get_chapters_cursor))
         .route("/s/:chapter_id", get(get_chapter));
 

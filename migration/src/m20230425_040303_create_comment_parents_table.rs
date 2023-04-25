@@ -1,33 +1,53 @@
 use sea_orm_migration::prelude::*;
 
+use crate::m20230425_040131_create_comments_table::Comments;
+
 #[derive(DeriveMigrationName)]
 pub struct Migration;
-
-// CREATE TABLE IF NOT EXISTS comments (
-//     parent_comment_id uuid NOT NULL REFERENCES comments(id),
-//     child_comment_id uuid NOT NULL REFERENCES comments(id)
-// );
 
 #[async_trait::async_trait]
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         // Replace the sample below with your own migration scripts
-        todo!();
-
         manager
             .create_table(
                 Table::create()
-                    .table(Post::Table)
+                    .table(CommentParentsChildren::Table)
                     .if_not_exists()
                     .col(
-                        ColumnDef::new(Post::Id)
-                            .integer()
-                            .not_null()
-                            .auto_increment()
-                            .primary_key(),
+                        ColumnDef::new(CommentParentsChildren::Id)
+                            .uuid()
+                            .primary_key()
+                            .not_null(),
                     )
-                    .col(ColumnDef::new(Post::Title).string().not_null())
-                    .col(ColumnDef::new(Post::Text).string().not_null())
+                    .col(
+                        ColumnDef::new(CommentParentsChildren::ParentCommentId)
+                            .uuid()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(CommentParentsChildren::ChildCommentId)
+                            .uuid()
+                            .not_null(),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .name("fk-comment_parents_children-parent_comment_id")
+                            .from(
+                                CommentParentsChildren::Table,
+                                CommentParentsChildren::ParentCommentId,
+                            )
+                            .to(Comments::Table, Comments::Id),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .name("fk-comment_parents_children-child_comment_id")
+                            .from(
+                                CommentParentsChildren::Table,
+                                CommentParentsChildren::ChildCommentId,
+                            )
+                            .to(Comments::Table, Comments::Id),
+                    )
                     .to_owned(),
             )
             .await
@@ -35,19 +55,21 @@ impl MigrationTrait for Migration {
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         // Replace the sample below with your own migration scripts
-        todo!();
-
         manager
-            .drop_table(Table::drop().table(Post::Table).to_owned())
+            .drop_table(
+                Table::drop()
+                    .table(CommentParentsChildren::Table)
+                    .to_owned(),
+            )
             .await
     }
 }
 
 /// Learn more at https://docs.rs/sea-query#iden
 #[derive(Iden)]
-enum Post {
+enum CommentParentsChildren {
     Table,
+    ParentCommentId,
+    ChildCommentId,
     Id,
-    Title,
-    Text,
 }

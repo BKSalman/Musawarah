@@ -53,3 +53,9 @@ pub struct CreateComic {
     pub title: String,
     pub description: String,
 }
+
+#[derive(Deserialize, ToSchema)]
+pub struct UpdateComic {
+    pub title: Option<String>,
+    pub description: Option<String>,
+}

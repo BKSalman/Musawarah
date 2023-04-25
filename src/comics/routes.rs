@@ -6,9 +6,9 @@ use chrono::Utc;
 use itertools::multizip;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, IntoActiveModel, LoaderTrait,
-    QueryFilter, QuerySelect,
+    QueryFilter, QuerySelect, Set,
 };
-use serde::Deserialize;
+use serde_json::json;
 use uuid::Uuid;
 
 use crate::{
@@ -19,18 +19,15 @@ use crate::{
 };
 
 use super::{
-    models::{ComicResponseBrief, CreateComic},
+    models::{ComicResponseBrief, CreateComic, UpdateComic},
     ComicsError,
 };
 
 /// Create Comic
 #[utoipa::path(
-    get,
+    post,
     path = "/api/v1/comics",
     request_body(content = CreateComic, content_type = "application/json"),
-    params(
-        ("comic_id" = Uuid, Path, description = "ID of the requested comic"),
-    ),
     responses(
         (status = 200, description = "Caller authorized. returned requested comic", body = ComicResponse),
         (status = StatusCode::UNAUTHORIZED, description = "Caller unauthorized", body = ErrorHandlingResponse ),
@@ -95,18 +92,15 @@ pub async fn create_comic(
     Ok(Json(comic))
 }
 
-#[derive(Deserialize)]
-pub struct GetComicParams {
-    comic_id: Uuid,
-}
+// #[derive(Deserialize, IntoParams)]
+// pub struct ComicParams {
+//     comic_id: Uuid,
+// }
 
 /// Get comic by id
 #[utoipa::path(
     get,
     path = "/api/v1/comics/{comic_id}",
-    params(
-        ("comic_id" = Uuid, Path, description = "ID of the requested comic"),
-    ),
     responses(
         (status = 200, description = "Caller authorized. returned requested comic", body = ComicResponse),
         (status = StatusCode::UNAUTHORIZED, description = "Caller unauthorized", body = ErrorHandlingResponse ),
@@ -119,9 +113,9 @@ pub struct GetComicParams {
 )]
 pub async fn get_comic(
     State(db): State<DatabaseConnection>,
-    Path(params): Path<GetComicParams>,
+    Path(comic_id): Path<Uuid>,
 ) -> Result<Json<ComicResponseBrief>, ComicsError> {
-    let comic = Comic::find_by_id(params.comic_id)
+    let comic = Comic::find_by_id(comic_id)
         // .find_with_related(entity::chapters::Entity)
         .all(&db)
         .await?;
@@ -219,4 +213,67 @@ pub async fn get_comics_cursor(
         .collect();
 
     Ok(Json(comics?))
+}
+
+/// Update comic
+#[utoipa::path(
+    put,
+    path = "/api/v1/comics/{comic_id}",
+    request_body(content = UpdateComic, content_type = "application/json"),
+    responses(
+        (status = 200, description = "Specified comic has been successfully updated", body = Uuid),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
+    ),
+    tag = "Comics API"
+)]
+pub async fn update_comic(
+    State(db): State<DatabaseConnection>,
+    Path(comic_id): Path<Uuid>,
+    Json(payload): Json<UpdateComic>,
+) -> Result<Json<Uuid>, ComicsError> {
+    let Some(comic) = Comic::find_by_id(comic_id).one(&db).await? else {
+        tracing::error!("Comic not found: {}", comic_id);
+        return Err(ComicsError::ComicNotFound);
+    };
+
+    let mut comic = comic.into_active_model();
+
+    if let Some(title) = payload.title {
+        comic.title = Set(title);
+    }
+
+    if let Some(description) = payload.description {
+        comic.description = Set(description);
+    }
+
+    let comic = comic.update(&db).await?;
+    // TODO: error handling
+
+    Ok(Json(comic.id))
+}
+
+/// Delete comic
+#[utoipa::path(
+    delete,
+    path = "/api/v1/comics/{comic_id}",
+    responses(
+        (status = 200, description = "Specified comic has been successfully deleted"),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
+    ),
+    tag = "Comics API"
+)]
+pub async fn delete_comic(
+    State(db): State<DatabaseConnection>,
+    Path(comic_id): Path<Uuid>,
+) -> Result<Json<serde_json::Value>, ComicsError> {
+    let res = Comic::delete_by_id(comic_id).exec(&db).await?;
+
+    if res.rows_affected < 1 {
+        tracing::error!("Comic not found: {}", comic_id);
+        return Err(ComicsError::ComicNotFound);
+    }
+
+    Ok(Json(json!({
+        "message": format!("deleted {} comics", res.rows_affected)
+    })))
 }

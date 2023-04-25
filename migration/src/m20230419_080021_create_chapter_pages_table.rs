@@ -51,17 +51,20 @@ impl MigrationTrait for Migration {
                     .foreign_key(
                         ForeignKey::create()
                             .from(ChapterPages::Table, ChapterPages::AuthorId)
-                            .to(Users::Table, Users::Id),
+                            .to(Users::Table, Users::Id)
+                            .on_delete(ForeignKeyAction::Cascade),
                     )
                     .foreign_key(
                         ForeignKey::create()
                             .from(ChapterPages::Table, ChapterPages::ComicId)
-                            .to(Comics::Table, Comics::Id),
+                            .to(Comics::Table, Comics::Id)
+                            .on_delete(ForeignKeyAction::Cascade),
                     )
                     .foreign_key(
                         ForeignKey::create()
                             .from(ChapterPages::Table, ChapterPages::ChapterId)
-                            .to(Chapters::Table, Chapters::Id),
+                            .to(Chapters::Table, Chapters::Id)
+                            .on_delete(ForeignKeyAction::Cascade),
                     )
                     .index(
                         Index::create()

@@ -20,12 +20,14 @@ pub enum Relation {
     ChapterPages,
     #[sea_orm(has_many = "super::chapters::Entity")]
     Chapters,
+    #[sea_orm(has_many = "super::comments::Entity")]
+    Comments,
     #[sea_orm(
         belongs_to = "super::users::Entity",
         from = "Column::AuthorId",
         to = "super::users::Column::Id",
         on_update = "NoAction",
-        on_delete = "NoAction"
+        on_delete = "Cascade"
     )]
     Users,
 }
@@ -39,6 +41,12 @@ impl Related<super::chapter_pages::Entity> for Entity {
 impl Related<super::chapters::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Chapters.def()
+    }
+}
+
+impl Related<super::comments::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Comments.def()
     }
 }
 

@@ -25,7 +25,8 @@ impl MigrationTrait for Migration {
                         ForeignKey::create()
                             .name("fk-comics-author_id")
                             .from(Comics::Table, Comics::AuthorId)
-                            .to(Users::Table, Users::Id),
+                            .to(Users::Table, Users::Id)
+                            .on_delete(ForeignKeyAction::Cascade),
                     )
                     .to_owned(),
             )
