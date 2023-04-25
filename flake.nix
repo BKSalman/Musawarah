@@ -56,6 +56,7 @@
 
             # run dev servers
             alias lcr='RUST_LOG=debug cargo run'
+            alias lcw='RUST_LOG=debug cargo watch -x run'
             alias npmd='pnpm run dev'
 
             # start dev database if available, if not create, and run it on port 5445
@@ -67,7 +68,7 @@
               -d postgres
 
             # add DATABASE_URL to .env file if not already there
-            grep DATABASE_URL .env || echo "DATABASE_URL=postgres://postgres:musawarah-dev@localhost:5445" >> .env
+            grep DATABASE_URL .env || echo "DATABASE_URL=postgres://postgres:musawarah-dev@localhost:5445/postgres" >> .env
 
             # export environment variables
             export $(cat .env)
