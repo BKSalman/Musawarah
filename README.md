@@ -8,9 +8,9 @@ This platform is developed using the following tools and technologies:
 Backend:
 
 - [Axum](https://github.com/tokio-rs/axum) Web framework
-- [garde](https://github.com/jprochazk/garde) Validation crate
-- [sqlx](https://github.com/launchbadge/sqlx) SQL Database crate
-- [ts-rs](https://github.com/Aleph-Alpha/ts-rs) Generate TS bindings from the backend models
+- [Garde](https://github.com/jprochazk/garde) Validation crate
+- [SeaORM](https://github.com/SeaQL/sea-orm) Database ORM
+- [TS-rs](https://github.com/Aleph-Alpha/ts-rs) Generate TS bindings from the backend models
 
 Frontend:
 
@@ -26,7 +26,7 @@ just install [the nix package manager](https://zero-to-nix.com/start/install) an
 nix develop
 ```
 ### Backend
-make sure you have [Rust](https://doc.rust-lang.org/book/ch01-01-installation.html) & [sqlx-cli](https://crates.io/crates/sqlx-cli) & [docker](https://www.docker.com/) installed (already done if using nix)
+make sure you have [Rust](https://doc.rust-lang.org/book/ch01-01-installation.html) & [sea-orm-cli](https://crates.io/crates/sea-orm-cli) & [docker](https://www.docker.com/) installed (already done if using nix)
 #### Database
 to setup a dev database run the following commands:
 
@@ -50,11 +50,16 @@ export $(cat .env)
 
 > this will use the migration details in the `migrations` folder to add to the database
 ```bash
-# first install sqlx with cargo
-cargo install sqlx-cli
+# first install sea-orm-cli with cargo
+cargo install sea-orm-cli
 
 # in project root
-sqlx migrate run
+# this will commit the migrations to the database
+sea-orm-cli migrate refresh
+
+# in project root
+# this will generate entity models as Rust types from the database
+sea-orm-cli generate entity -o src/entity/
 ```
 
 #### Run dev server
