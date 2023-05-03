@@ -60,6 +60,7 @@ pub static JWT_KEY: Lazy<HS256Key> = Lazy::new(|| HS256Key::generate());
         schemas(users::models::UserResponse),
         schemas(users::models::UserClaims),
         schemas(users::models::CreateUser),
+        schemas(users::models::CreateUserReponse),
         schemas(users::models::UserLogin),
         schemas(users::models::UserToken),
         schemas(ErrorHandlingResponse),

@@ -23,7 +23,10 @@ use crate::{
 };
 
 use super::{
-    models::{CreateUser, UserClaims, UserLogin, UserResponse, UserResponseBrief, UserToken},
+    models::{
+        CreateUser, CreateUserReponse, UserClaims, UserLogin, UserResponse, UserResponseBrief,
+        UserToken,
+    },
     UsersError,
 };
 
@@ -31,9 +34,12 @@ use super::{
 #[utoipa::path(
     post,
     path = "/api/v1/users",
-    request_body(content = CreateUser, description = "Username, Email, and password", content_type = "application/json"),
+    request_body(
+        content = CreateUser,
+        description = "Validation:\n- username: min = 5, max = 60\n- password: min = 8",
+        content_type = "application/json"),
     responses(
-        (status = 200, description = "User successfully created", body = UserResponse),
+        (status = 200, description = "User successfully created", body = CreateUserReponse),
         (status = StatusCode::BAD_REQUEST, description = "Fields validation error", body = ErrorHandlingResponse),
         (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
     ),
@@ -42,7 +48,7 @@ use super::{
 pub async fn create_user(
     State(state): State<AppState>,
     Json(payload): Json<CreateUser>,
-) -> Result<Json<Uuid>, UsersError> {
+) -> Result<Json<CreateUserReponse>, UsersError> {
     payload.validate(&())?;
     if payload.username.is_empty() || payload.password.is_empty() || payload.email.is_empty() {
         return Err(UsersError::BadRequest);
@@ -66,10 +72,49 @@ pub async fn create_user(
         password: hashed_password,
         created_at: Utc::now().naive_utc(),
         last_login: None,
+        // TODO: check this
+        first_name: None,
+        last_name: None,
+        phone_number: None,
     }
     .into_active_model()
     .insert(&state.db)
-    .await?;
+    .await
+    .map_err(|err| {
+        // tracing::error!("error {:#?}", err);
+        match err {
+            migration::DbErr::Query(e) => match e {
+                sea_orm::RuntimeErr::SqlxError(sqlx_err) => match sqlx_err {
+                    sqlx::Error::Database(err) => match err.constraint() {
+                        Some("users_username_key") => {
+                            tracing::error!("{}", err);
+                            UsersError::Conflict(String::from("username already taken"))
+                        }
+                        Some("users_email_key") => {
+                            tracing::error!("{}", err);
+                            UsersError::Conflict(String::from("email already taken"))
+                        }
+                        _ => {
+                            tracing::error!("sqlx error: {}", err);
+                            UsersError::InternalServerError
+                        }
+                    },
+                    _ => {
+                        tracing::error!("seaorm runtime - sqlx error: {}", sqlx_err);
+                        UsersError::InternalServerError
+                    }
+                },
+                sea_orm::RuntimeErr::Internal(internal_err) => {
+                    tracing::error!("seaorm runtime - internal error: {}", internal_err);
+                    UsersError::InternalServerError
+                }
+            },
+            _ => {
+                tracing::error!("DB error: {}", err);
+                UsersError::InternalServerError
+            }
+        }
+    })?;
 
     let _profile_image = entity::profile_images::Model {
         id: Uuid::now_v7(),
@@ -81,30 +126,18 @@ pub async fn create_user(
     .insert(&state.db)
     .await?;
 
-    //     .map_err(|e| match e {
-    //         sqlx::Error::Database(dbe) => match dbe.constraint() {
-    //             Some("users_username_key") => UsersError::Conflict("username taken".into()),
-    //             Some("users_email_key") => UsersError::Conflict("email taken".into()),
-    //             _ => {
-    //                 tracing::debug!("create_user db error: {:#?}", dbe);
-    //                 UsersError::InternalServerError
-    //             }
-    //         },
-    //         _ => {
-    //             // TODO: log this instead of printing
-    //             tracing::debug!("{e:#?}");
-    //             UsersError::InternalServerError
-    //         }
-    //     })?;
-
-    Ok(Json(user.id))
+    Ok(Json(CreateUserReponse { user_id: user.id }))
 }
 
 /// User login
 #[utoipa::path(
     post,
     path = "/api/v1/users/login",
-    request_body(content = UserLogin, description = "Email and password", content_type = "application/json"),
+    request_body(
+        content = UserLogin,
+        description = "Validation:- password: min = 8",
+        content_type = "application/json"
+    ),
     responses(
         (status = 200, description = "User authenticated", body = UserToken),
         (status = StatusCode::UNAUTHORIZED, description = "User unauthorized", body = ErrorHandlingResponse ),

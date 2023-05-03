@@ -16,6 +16,11 @@ pub struct CreateUser {
     pub password: String,
 }
 
+#[derive(Deserialize, Serialize, ToSchema, TS)]
+pub struct CreateUserReponse {
+    pub user_id: Uuid,
+}
+
 #[derive(Validate, Deserialize, ToSchema, TS)]
 pub struct UserLogin {
     #[garde(email)]
