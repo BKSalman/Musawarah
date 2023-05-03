@@ -7,8 +7,13 @@ use sea_orm::entity::prelude::*;
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: Uuid,
+    #[sea_orm(unique)]
     pub username: String,
+    pub first_name: Option<String>,
+    pub last_name: Option<String>,
+    pub phone_number: Option<String>,
     pub displayname: String,
+    #[sea_orm(unique)]
     pub email: String,
     pub password: String,
     pub created_at: DateTime,
@@ -27,6 +32,8 @@ pub enum Relation {
     Comments,
     #[sea_orm(has_many = "super::profile_images::Entity")]
     ProfileImages,
+    #[sea_orm(has_many = "super::user_roles::Entity")]
+    UserRoles,
 }
 
 impl Related<super::chapter_pages::Entity> for Entity {
@@ -56,6 +63,12 @@ impl Related<super::comments::Entity> for Entity {
 impl Related<super::profile_images::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::ProfileImages.def()
+    }
+}
+
+impl Related<super::user_roles::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::UserRoles.def()
     }
 }
 

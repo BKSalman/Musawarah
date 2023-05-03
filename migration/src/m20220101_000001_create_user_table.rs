@@ -13,9 +13,22 @@ impl MigrationTrait for Migration {
                     .table(Users::Table)
                     .if_not_exists()
                     .col(ColumnDef::new(Users::Id).uuid().not_null().primary_key())
-                    .col(ColumnDef::new(Users::Username).string().not_null())
+                    .col(
+                        ColumnDef::new(Users::Username)
+                            .string()
+                            .not_null()
+                            .unique_key(),
+                    )
+                    .col(ColumnDef::new(Users::FirstName).string())
+                    .col(ColumnDef::new(Users::LastName).string())
+                    .col(ColumnDef::new(Users::PhoneNumber).string())
                     .col(ColumnDef::new(Users::Displayname).string().not_null())
-                    .col(ColumnDef::new(Users::Email).string().not_null())
+                    .col(
+                        ColumnDef::new(Users::Email)
+                            .string()
+                            .not_null()
+                            .unique_key(),
+                    )
                     .col(ColumnDef::new(Users::Password).string().not_null())
                     .col(ColumnDef::new(Users::CreatedAt).date_time().not_null())
                     .col(ColumnDef::new(Users::LastLogin).date_time())
@@ -43,4 +56,7 @@ pub enum Users {
     Password,
     CreatedAt,
     LastLogin,
+    FirstName,
+    LastName,
+    PhoneNumber,
 }

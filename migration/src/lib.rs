@@ -7,6 +7,7 @@ mod m20230419_080021_create_chapter_pages_table;
 mod m20230422_082609_create_profile_images_table;
 mod m20230425_040131_create_comments_table;
 mod m20230425_040303_create_comment_parents_table;
+mod m20230426_121507_create_user_roles_table;
 
 pub struct Migrator;
 
@@ -21,6 +22,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20230422_082609_create_profile_images_table::Migration),
             Box::new(m20230425_040131_create_comments_table::Migration),
             Box::new(m20230425_040303_create_comment_parents_table::Migration),
+            Box::new(m20230426_121507_create_user_roles_table::Migration),
         ]
     }
 }
