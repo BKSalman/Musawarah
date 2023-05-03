@@ -32,6 +32,9 @@ use utoipa_swagger_ui::SwaggerUi;
 
 #[tokio::main]
 async fn main() {
+    #[cfg(debug_assertions)]
+    std::env::set_var("RUST_LOG", "debug");
+
     tracing_subscriber::registry()
         .with(tracing_subscriber::fmt::layer())
         .with(EnvFilter::from_default_env())
