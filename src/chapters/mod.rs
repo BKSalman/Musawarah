@@ -23,9 +23,6 @@ pub enum ChaptersError {
     #[error("image size too large, maximum image size is 5MB")]
     ImageTooLarge,
 
-    #[error("jwt internal server error")]
-    JWT(#[from] jwt_simple::Error),
-
     #[error("sea_orm internal server error")]
     SeaORM(#[from] sea_orm::error::DbErr),
 
@@ -58,10 +55,6 @@ impl IntoResponse for ChaptersError {
             ChaptersError::Conflict(_) => (StatusCode::CONFLICT, vec![self.to_string()]),
             ChaptersError::SeaORM(_) => (StatusCode::INTERNAL_SERVER_ERROR, vec![self.to_string()]),
             ChaptersError::InternalServerError => {
-                (StatusCode::INTERNAL_SERVER_ERROR, vec![self.to_string()])
-            }
-            ChaptersError::JWT(_) => {
-                // TODO: add logging for this
                 (StatusCode::INTERNAL_SERVER_ERROR, vec![self.to_string()])
             }
         };

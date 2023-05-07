@@ -1,6 +1,4 @@
 use axum::{extract::FromRef, response::IntoResponse};
-use jwt_simple::prelude::HS256Key;
-use once_cell::sync::Lazy;
 use s3::interface::Storage;
 use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
@@ -10,11 +8,12 @@ use utoipa::{
 };
 use uuid::Uuid;
 
+pub mod auth;
 pub mod chapters;
 pub mod comics;
 pub mod entity;
-pub mod middlewares;
 pub mod s3;
+pub mod sessions;
 pub mod users;
 
 #[derive(Clone, FromRef)]
@@ -22,8 +21,6 @@ pub struct AppState {
     pub db: DatabaseConnection,
     pub storage: Storage,
 }
-
-pub static JWT_KEY: Lazy<HS256Key> = Lazy::new(|| HS256Key::generate());
 
 #[derive(OpenApi)]
 #[openapi(
@@ -101,11 +98,8 @@ pub struct SecurityAddon;
 impl Modify for SecurityAddon {
     fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
         if let Some(components) = openapi.components.as_mut() {
-            let bearer = HttpBuilder::new()
-                .scheme(HttpAuthScheme::Bearer)
-                .bearer_format("Bearer")
-                .build();
-            components.add_security_scheme("jwt", SecurityScheme::Http(bearer))
+            let http_auth_scheme = HttpBuilder::new().scheme(HttpAuthScheme::Basic).build();
+            components.add_security_scheme("auth", SecurityScheme::Http(http_auth_scheme))
         }
     }
 }

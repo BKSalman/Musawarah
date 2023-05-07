@@ -23,9 +23,6 @@ pub enum UsersError {
     HasNoPosts,
 
     #[error("internal server error")]
-    JWT(#[from] jwt_simple::Error),
-
-    #[error("internal server error")]
     SeaORM(#[from] sea_orm::error::DbErr),
 
     #[error("internal server error")]
@@ -86,15 +83,6 @@ impl IntoResponse for UsersError {
                 },
             ),
             UsersError::Argon2(_) => {
-                // TODO: add logging for this
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    ErrorHandlingResponse {
-                        errors: vec![self.to_string()],
-                    },
-                )
-            }
-            UsersError::JWT(_) => {
                 // TODO: add logging for this
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,

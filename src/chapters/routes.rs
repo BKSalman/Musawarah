@@ -2,7 +2,7 @@ use std::io::SeekFrom;
 
 use axum::{
     extract::{Multipart, Path, Query, State},
-    Json,
+    Extension, Json,
 };
 use chrono::Utc;
 use futures::{FutureExt, TryStreamExt};
@@ -22,8 +22,7 @@ use crate::{
     comics::models::ImageResponse,
     entity::{self, chapter_pages::Entity as ChapterPage, chapters::Entity as Chapter},
     s3::{interface::Storage, Upload},
-    users::models::UserClaims,
-    PaginationParams,
+    AppState, PaginationParams,
 };
 
 use super::{
@@ -51,15 +50,16 @@ const ALLOWED_MIME_TYPES: [&str; 3] = ["image/jpeg", "image/jpg", "image/png"];
     ),
     tag = "Chapters API"
 )]
+#[axum::debug_handler]
 pub async fn create_chapter(
-    user_claims: UserClaims,
+    Extension(user): Extension<entity::users::Model>,
     State(db): State<DatabaseConnection>,
     Json(payload): Json<CreateChapter>,
 ) -> Result<Json<ChapterResponseBrief>, ChaptersError> {
     let current_date = Utc::now().naive_utc();
     let chapter = entity::chapters::Model {
         id: Uuid::now_v7(),
-        author_id: user_claims.user.id,
+        author_id: user.id,
         comic_id: payload.comic_id,
         number: payload.number,
         title: payload.title,
@@ -125,8 +125,9 @@ pub async fn create_chapter(
     ),
     tag = "Chapters API"
 )]
+#[axum::debug_handler(state = AppState)]
 pub async fn create_chapter_page(
-    user_claims: UserClaims,
+    Extension(user): Extension<entity::users::Model>,
     State(storage): State<Storage>,
     State(db): State<DatabaseConnection>,
     mut fields: Multipart,
@@ -255,7 +256,7 @@ pub async fn create_chapter_page(
                 let current_date = Utc::now().naive_utc();
                 let chapter_page = entity::chapter_pages::Model {
                     id: Uuid::now_v7(),
-                    author_id: user_claims.user.id,
+                    author_id: user.id,
                     comic_id: chapter_page.comic_id,
                     chapter_id: chapter_page.chapter_id,
                     number: chapter_page.number,
@@ -318,6 +319,7 @@ pub async fn create_chapter_page(
     ),
     tag = "Chapters API"
 )]
+#[axum::debug_handler]
 pub async fn get_chapters_cursor(
     State(db): State<DatabaseConnection>,
     Query(pagination): Query<PaginationParams>,
@@ -367,6 +369,7 @@ pub async fn get_chapters_cursor(
     ),
     tag = "Chapters API"
 )]
+#[axum::debug_handler]
 pub async fn get_chapter(
     State(db): State<DatabaseConnection>,
     Path(chapter_id): Path<Uuid>,
@@ -415,6 +418,7 @@ pub async fn get_chapter(
     ),
     tag = "Chapters API"
 )]
+#[axum::debug_handler]
 pub async fn update_chapter(
     State(db): State<DatabaseConnection>,
     Path(chapter_id): Path<Uuid>,
@@ -455,6 +459,7 @@ pub async fn update_chapter(
     ),
     tag = "Chapters API"
 )]
+#[axum::debug_handler]
 pub async fn delete_chapter(
     State(db): State<DatabaseConnection>,
     Path(chapter_id): Path<Uuid>,
@@ -481,6 +486,7 @@ pub async fn delete_chapter(
     ),
     tag = "Chapters API"
 )]
+#[axum::debug_handler]
 pub async fn delete_chapter_page(
     State(db): State<DatabaseConnection>,
     Path(chapter_page_id): Path<Uuid>,

@@ -21,9 +21,6 @@ pub enum ComicsError {
     ImageTooLarge,
 
     #[error("internal server error")]
-    JWT(#[from] jwt_simple::Error),
-
-    #[error("internal server error")]
     SeaORM(#[from] sea_orm::DbErr),
 
     // #[error("validation error: {0}")]
@@ -47,10 +44,6 @@ impl IntoResponse for ComicsError {
             }
             ComicsError::InternalServerError => {
                 tracing::error!("internal server error: {:#?}", self);
-                (StatusCode::INTERNAL_SERVER_ERROR, vec![self.to_string()])
-            }
-            ComicsError::JWT(_) => {
-                tracing::error!("JWT error: {:#?}", self);
                 (StatusCode::INTERNAL_SERVER_ERROR, vec![self.to_string()])
             }
         };

@@ -8,5 +8,6 @@ pub mod comics;
 pub mod comment_parents_children;
 pub mod comments;
 pub mod profile_images;
+pub mod sessions;
 pub mod user_roles;
 pub mod users;

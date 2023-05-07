@@ -9,7 +9,6 @@ use axum::{
 use chrono::Utc;
 use garde::Validate;
 use itertools::multizip;
-use jwt_simple::prelude::*;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, IntoActiveModel, LoaderTrait,
     ModelTrait, QueryFilter, QuerySelect,
@@ -17,16 +16,14 @@ use sea_orm::{
 use uuid::Uuid;
 
 use crate::{
+    auth::AuthContext,
     chapters::models::ChapterResponseBrief,
     comics::models::{ComicResponseBrief, ImageResponse},
-    entity, AppState, PaginationParams, JWT_KEY,
+    entity, AppState, PaginationParams,
 };
 
 use super::{
-    models::{
-        CreateUser, CreateUserReponse, UserClaims, UserLogin, UserResponse, UserResponseBrief,
-        UserToken,
-    },
+    models::{CreateUser, CreateUserReponse, UserLogin, UserResponse, UserResponseBrief},
     UsersError,
 };
 
@@ -45,6 +42,7 @@ use super::{
     ),
     tag = "Users API"
 )]
+#[axum::debug_handler]
 pub async fn create_user(
     State(state): State<AppState>,
     Json(payload): Json<CreateUser>,
@@ -82,38 +80,27 @@ pub async fn create_user(
     .await
     .map_err(|err| {
         // tracing::error!("error {:#?}", err);
-        match err {
-            migration::DbErr::Query(e) => match e {
-                sea_orm::RuntimeErr::SqlxError(sqlx_err) => match sqlx_err {
-                    sqlx::Error::Database(err) => match err.constraint() {
-                        Some("users_username_key") => {
-                            tracing::error!("{}", err);
-                            UsersError::Conflict(String::from("username already taken"))
-                        }
-                        Some("users_email_key") => {
-                            tracing::error!("{}", err);
-                            UsersError::Conflict(String::from("email already taken"))
-                        }
-                        _ => {
-                            tracing::error!("sqlx error: {}", err);
-                            UsersError::InternalServerError
-                        }
-                    },
-                    _ => {
-                        tracing::error!("seaorm runtime - sqlx error: {}", sqlx_err);
-                        UsersError::InternalServerError
-                    }
-                },
-                sea_orm::RuntimeErr::Internal(internal_err) => {
-                    tracing::error!("seaorm runtime - internal error: {}", internal_err);
+        if let migration::DbErr::Query(sea_orm::RuntimeErr::SqlxError(sqlx::Error::Database(
+            error,
+        ))) = err
+        {
+            return match error.constraint() {
+                Some("users_username_key") => {
+                    tracing::error!("{}", error);
+                    UsersError::Conflict(String::from("username already taken"))
+                }
+                Some("users_email_key") => {
+                    tracing::error!("{}", error);
+                    UsersError::Conflict(String::from("email already taken"))
+                }
+                _ => {
+                    tracing::error!("sqlx error: {}", error);
                     UsersError::InternalServerError
                 }
-            },
-            _ => {
-                tracing::error!("DB error: {}", err);
-                UsersError::InternalServerError
-            }
+            };
         }
+        tracing::error!("sqlx error: {}", err);
+        UsersError::InternalServerError
     })?;
 
     let _profile_image = entity::profile_images::Model {
@@ -145,40 +132,16 @@ pub async fn create_user(
     ),
     tag = "Users API"
 )]
+#[axum::debug_handler]
 pub async fn login(
     State(db): State<DatabaseConnection>,
+    mut auth: AuthContext,
     Json(payload): Json<UserLogin>,
-) -> Result<Json<UserToken>, UsersError> {
+) -> Result<(), UsersError> {
     payload.validate(&())?;
+
     // argon2 is a good algorithm (not a security expert :))
     let argon2 = Argon2::default();
-
-    //     let record = sqlx::query!(
-    //         r#"
-    // SELECT users.id AS user_id, users.displayname, users.username, users.email, users.password,
-    // profile_images.path, profile_images.content_type
-    // FROM users
-
-    // INNER JOIN profile_images
-    // ON users.id = profile_images.user_id
-
-    // WHERE email = $1;
-    //         "#,
-    //         payload.email,
-    //     )
-    //     .fetch_optional(&db)
-    //     .await
-    //     // TODO: better error handling
-    //     .map_err(|error| match error {
-    //         _ => {
-    //             tracing::debug!("login db error: {:#?}", error);
-    //             UsersError::InternalServerError
-    //         }
-    //     })?;
-
-    // let Some(record) = record else {
-    //     return Err(UsersError::UserNotFound);
-    // };
 
     let Some(user) = entity::users::Entity::find()
         .filter(entity::users::Column::Email.eq(&payload.email))
@@ -196,36 +159,23 @@ pub async fn login(
         return Err(UsersError::InvalidCredentials);
     }
 
-    // TODO: profile image
-    let Some(profile_image) = user
-        .find_related(entity::profile_images::Entity)
-        .one(&db)
-        .await? else {
-        return Err(UsersError::InternalServerError);
-    };
+    auth.login(&user).await.unwrap();
 
-    let claims = Claims::with_custom_claims(
-        UserClaims {
-            user: UserResponse {
-                id: user.id,
-                displayname: user.displayname,
-                username: user.username,
-                email: user.email,
-                profile_image: ImageResponse {
-                    path: profile_image.path,
-                    content_type: profile_image.content_type,
-                },
-            },
-        },
-        Duration::from_mins(20),
-    );
+    Ok(())
+}
 
-    let token = JWT_KEY.authenticate(claims)?;
-
-    Ok(Json(UserToken {
-        access_token: token,
-        r#type: String::from("Bearer"),
-    }))
+/// User logout
+#[utoipa::path(
+    get,
+    path = "/api/v1/users/logout",
+    responses(
+        (status = 200, description = "User logged out", body = UserToken),
+    ),
+    tag = "Users API"
+)]
+#[axum::debug_handler]
+pub async fn logout(mut auth: AuthContext) {
+    auth.logout().await;
 }
 
 /// Get user comics by username
@@ -236,32 +186,29 @@ pub async fn login(
         PaginationParams
     ),
     responses(
-        (status = 200, description = "Caller authorized. returned requested user's comics", body = [PostResponse]),
+        (status = 200, description = "Caller authorized. returned requested user's comics", body = [ComicResponse]),
         (status = StatusCode::UNAUTHORIZED, description = "Caller unauthorized", body = ErrorHandlingResponse),
         (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
     ),
     security(
-        ("jwt" = [])
+        ("auth" = [])
     ),
     tag = "Users API"
 )]
+#[axum::debug_handler]
 pub async fn get_user_comics(
-    // prevent non logged users from
-    // accessing a specific user's posts
-    _: UserClaims,
     State(db): State<DatabaseConnection>,
     Path(username): Path<String>,
     Query(pagination): Query<PaginationParams>,
 ) -> Result<Json<Vec<ComicResponseBrief>>, UsersError> {
+    tracing::debug!("get {}'s comics", username);
+
     let Some(user) = entity::users::Entity::find()
         .filter(entity::users::Column::Username.eq(username))
         .one(&db)
         .await? else {
         return Err(UsersError::UserNotFound);
     };
-
-    // FIXME: query comics, chapters, and chapter pages in same query
-    // or 2 separate queries
 
     let comics = user
         .find_related(entity::comics::Entity)
@@ -315,10 +262,11 @@ pub async fn get_user_comics(
         (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
     ),
     security(
-        ("jwt" = [])
+        ("auth" = [])
     ),
     tag = "Users API"
 )]
+#[axum::debug_handler]
 pub async fn get_user(
     State(db): State<DatabaseConnection>,
     Path(user_id): Path<Uuid>,

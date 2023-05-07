@@ -1,6 +1,6 @@
 use axum::{
     extract::{Path, Query, State},
-    Json,
+    Extension, Json,
 };
 use chrono::Utc;
 use itertools::multizip;
@@ -14,7 +14,7 @@ use uuid::Uuid;
 use crate::{
     chapters::models::ChapterResponseBrief,
     entity::{self, chapters::Entity as Chapter, comics::Entity as Comic, users::Entity as User},
-    users::models::{UserClaims, UserResponseBrief},
+    users::models::UserResponseBrief,
     PaginationParams,
 };
 
@@ -34,12 +34,13 @@ use super::{
         (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
     ),
     security(
-        ("jwt" = [])
+        ("auth" = [])
     ),
     tag = "Comics API"
 )]
+#[axum::debug_handler]
 pub async fn create_comic(
-    user_claims: UserClaims,
+    Extension(user): Extension<entity::users::Model>,
     State(db): State<DatabaseConnection>,
     Json(payload): Json<CreateComic>,
 ) -> Result<Json<ComicResponseBrief>, ComicsError> {
@@ -65,7 +66,7 @@ pub async fn create_comic(
 
     let comic = entity::comics::Model {
         id: Uuid::now_v7(),
-        author_id: user_claims.user.id,
+        author_id: user.id,
         title: payload.title,
         description: payload.description,
         created_at: current_date,
@@ -78,10 +79,10 @@ pub async fn create_comic(
     let comic = ComicResponseBrief {
         id: comic.id,
         author: UserResponseBrief {
-            id: user_claims.user.id,
-            displayname: user_claims.user.displayname,
-            username: user_claims.user.username,
-            email: user_claims.user.email,
+            id: user.id,
+            displayname: user.displayname,
+            username: user.username,
+            email: user.email,
         },
         title: comic.title,
         description: comic.description,
@@ -107,10 +108,11 @@ pub async fn create_comic(
         (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
     ),
     security(
-        ("jwt" = [])
+        ("auth" = [])
     ),
     tag = "Comics API"
 )]
+#[axum::debug_handler]
 pub async fn get_comic(
     State(db): State<DatabaseConnection>,
     Path(comic_id): Path<Uuid>,
@@ -168,6 +170,7 @@ pub async fn get_comic(
     ),
     tag = "Comics API"
 )]
+#[axum::debug_handler]
 pub async fn get_comics_cursor(
     State(db): State<DatabaseConnection>,
     Query(pagination): Query<PaginationParams>,
@@ -226,6 +229,7 @@ pub async fn get_comics_cursor(
     ),
     tag = "Comics API"
 )]
+#[axum::debug_handler]
 pub async fn update_comic(
     State(db): State<DatabaseConnection>,
     Path(comic_id): Path<Uuid>,
@@ -262,6 +266,7 @@ pub async fn update_comic(
     ),
     tag = "Comics API"
 )]
+#[axum::debug_handler]
 pub async fn delete_comic(
     State(db): State<DatabaseConnection>,
     Path(comic_id): Path<Uuid>,
