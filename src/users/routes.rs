@@ -6,24 +6,28 @@ use axum::{
     extract::{Path, Query, State},
     Json,
 };
-use chrono::Utc;
+use chrono::{Duration, Utc};
 use garde::Validate;
 use itertools::multizip;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, IntoActiveModel, LoaderTrait,
-    ModelTrait, QueryFilter, QuerySelect,
+    ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait, IntoActiveModel,
+    LoaderTrait, ModelTrait, QueryFilter, QuerySelect,
 };
+use time::OffsetDateTime;
+use tower_cookies::{cookie::Cookie, Cookies};
 use uuid::Uuid;
 
 use crate::{
-    auth::AuthContext,
+    auth::AuthExtractor,
     chapters::models::ChapterResponseBrief,
     comics::models::{ComicResponseBrief, ImageResponse},
-    entity, AppState, PaginationParams,
+    entity,
+    sessions::SESSION_COOKIE_NAME,
+    AppState, PaginationParams, COOKIES_SECRET,
 };
 
 use super::{
-    models::{CreateUser, CreateUserReponse, UserLogin, UserResponse, UserResponseBrief},
+    models::{CreateUser, UserLogin, UserResponse, UserResponseBrief},
     UsersError,
 };
 
@@ -36,7 +40,7 @@ use super::{
         description = "Validation:\n- username: min = 5, max = 60\n- password: min = 8",
         content_type = "application/json"),
     responses(
-        (status = 200, description = "User successfully created", body = CreateUserReponse),
+        (status = 200, description = "User successfully created", body = UserReponse),
         (status = StatusCode::BAD_REQUEST, description = "Fields validation error", body = ErrorHandlingResponse),
         (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
     ),
@@ -46,7 +50,7 @@ use super::{
 pub async fn create_user(
     State(state): State<AppState>,
     Json(payload): Json<CreateUser>,
-) -> Result<Json<CreateUserReponse>, UsersError> {
+) -> Result<Json<UserResponse>, UsersError> {
     payload.validate(&())?;
     if payload.username.is_empty() || payload.password.is_empty() || payload.email.is_empty() {
         return Err(UsersError::BadRequest);
@@ -99,11 +103,11 @@ pub async fn create_user(
                 }
             };
         }
-        tracing::error!("sqlx error: {}", err);
+        tracing::error!("Db error: {}", err);
         UsersError::InternalServerError
     })?;
 
-    let _profile_image = entity::profile_images::Model {
+    let profile_image = entity::profile_images::Model {
         id: Uuid::now_v7(),
         user_id: user.id,
         path: String::from("ppL.webp"),
@@ -113,7 +117,16 @@ pub async fn create_user(
     .insert(&state.db)
     .await?;
 
-    Ok(Json(CreateUserReponse { user_id: user.id }))
+    Ok(Json(UserResponse {
+        id: user.id,
+        displayname: user.displayname,
+        username: user.username,
+        email: user.email,
+        profile_image: ImageResponse {
+            path: profile_image.path,
+            content_type: profile_image.content_type,
+        },
+    }))
 }
 
 /// User login
@@ -132,12 +145,18 @@ pub async fn create_user(
     ),
     tag = "Users API"
 )]
-#[axum::debug_handler]
 pub async fn login(
     State(db): State<DatabaseConnection>,
-    mut auth: AuthContext,
+    cookies: Cookies,
     Json(payload): Json<UserLogin>,
 ) -> Result<(), UsersError> {
+    let key = COOKIES_SECRET.get().expect("cookies secret key");
+
+    if let Some(session_id) = cookies.private(key).get(SESSION_COOKIE_NAME) {
+        tracing::error!("user already logged in with session id: {session_id}");
+        return Err(UsersError::AlreadyLoggedIn);
+    }
+
     payload.validate(&())?;
 
     // argon2 is a good algorithm (not a security expert :))
@@ -159,7 +178,39 @@ pub async fn login(
         return Err(UsersError::InvalidCredentials);
     }
 
-    auth.login(&user).await.unwrap();
+    let now_db = Utc::now();
+    let now = OffsetDateTime::now_utc();
+
+    let session = entity::sessions::Model {
+        id: Uuid::now_v7(),
+        user_id: user.id,
+        created_at: now_db.naive_utc(),
+        expires_at: (now_db + Duration::days(2)).naive_utc(),
+    }
+    .into_active_model()
+    .insert(&db)
+    .await?;
+
+    #[allow(unused_mut)]
+    let mut cookie = Cookie::build(SESSION_COOKIE_NAME, session.id.to_string())
+        .path("/")
+        .expires(now + time::Duration::days(2))
+        .http_only(true);
+
+    #[cfg(not(debug_assertions))]
+    {
+        cookie = cookie
+            // TODO: use the actual musawarah domain
+            .domain("salmanforgot.com")
+            .secure(true);
+    }
+
+    #[cfg(debug_assertions)]
+    {
+        cookie = cookie.domain("localhost");
+    }
+
+    cookies.private(key).add(cookie.finish());
 
     Ok(())
 }
@@ -173,9 +224,37 @@ pub async fn login(
     ),
     tag = "Users API"
 )]
-#[axum::debug_handler]
-pub async fn logout(mut auth: AuthContext) {
-    auth.logout().await;
+pub async fn logout(
+    cookies: Cookies,
+    State(db): State<DatabaseConnection>,
+    auth: AuthExtractor,
+) -> Result<(), UsersError> {
+    let session = entity::sessions::ActiveModel {
+        id: ActiveValue::Set(auth.session_id),
+        ..Default::default()
+    };
+    session.delete(&db).await?;
+
+    let mut cookie = Cookie::build(SESSION_COOKIE_NAME, "")
+        .path("/")
+        .http_only(true);
+
+    #[cfg(not(debug_assertions))]
+    {
+        cookie = cookie
+            // TODO: use the actual musawarah domain
+            .domain("salmanforgot.com")
+            .secure(true);
+    }
+
+    #[cfg(debug_assertions)]
+    {
+        cookie = cookie.domain("localhost");
+    }
+
+    cookies.remove(cookie.finish());
+
+    Ok(())
 }
 
 /// Get user comics by username

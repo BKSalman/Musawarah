@@ -1,7 +1,9 @@
 use axum::{extract::FromRef, response::IntoResponse};
+use once_cell::sync::OnceCell;
 use s3::interface::Storage;
 use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
+use tower_cookies::cookie::Key;
 use utoipa::{
     openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme},
     IntoParams, Modify, OpenApi, ToSchema,
@@ -21,6 +23,8 @@ pub struct AppState {
     pub db: DatabaseConnection,
     pub storage: Storage,
 }
+
+pub static COOKIES_SECRET: OnceCell<Key> = OnceCell::new();
 
 #[derive(OpenApi)]
 #[openapi(
@@ -53,11 +57,11 @@ pub struct AppState {
         schemas(chapters::models::UpdateChapter),
         schemas(chapters::models::CreateChapterPage),
         schemas(chapters::models::ChapterResponse),
+        schemas(chapters::models::ChapterResponseBrief),
         schemas(chapters::models::ChapterPageResponse),
         schemas(users::models::UserResponse),
         schemas(users::models::UserClaims),
         schemas(users::models::CreateUser),
-        schemas(users::models::CreateUserReponse),
         schemas(users::models::UserLogin),
         schemas(users::models::UserToken),
         schemas(ErrorHandlingResponse),

@@ -32,6 +32,8 @@ pub enum Relation {
     Comments,
     #[sea_orm(has_many = "super::profile_images::Entity")]
     ProfileImages,
+    #[sea_orm(has_many = "super::sessions::Entity")]
+    Sessions,
     #[sea_orm(has_many = "super::user_roles::Entity")]
     UserRoles,
 }
@@ -63,6 +65,12 @@ impl Related<super::comments::Entity> for Entity {
 impl Related<super::profile_images::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::ProfileImages.def()
+    }
+}
+
+impl Related<super::sessions::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Sessions.def()
     }
 }
 
