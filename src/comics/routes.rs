@@ -1,6 +1,6 @@
 use axum::{
     extract::{Path, Query, State},
-    Extension, Json,
+    Json,
 };
 use chrono::Utc;
 use itertools::multizip;
@@ -12,6 +12,7 @@ use serde_json::json;
 use uuid::Uuid;
 
 use crate::{
+    auth::AuthExtractor,
     chapters::models::ChapterResponseBrief,
     entity::{self, chapters::Entity as Chapter, comics::Entity as Comic, users::Entity as User},
     users::models::UserResponseBrief,
@@ -38,35 +39,18 @@ use super::{
     ),
     tag = "Comics API"
 )]
-#[axum::debug_handler]
 pub async fn create_comic(
-    Extension(user): Extension<entity::users::Model>,
+    auth: AuthExtractor,
     State(db): State<DatabaseConnection>,
     Json(payload): Json<CreateComic>,
 ) -> Result<Json<ComicResponseBrief>, ComicsError> {
     // save comic to db
-    //     .map_err(|e| match e {
-    //         sqlx::Error::Database(err) => match err.constraint() {
-    //             Some("comics_title_key") => {
-    //                 tracing::error!("{}", err);
-    //                 ComicsError::Conflict(String::from("comic with same title already exists"))
-    //             }
-    //             _ => {
-    //                 tracing::error!("{}", err);
-    //                 ComicsError::InternalServerError
-    //             }
-    //         },
-    //         _ => {
-    //             tracing::error!("{}", e);
-    //             ComicsError::InternalServerError
-    //         }
-    //     })?;
 
     let current_date = Utc::now().naive_utc();
 
     let comic = entity::comics::Model {
         id: Uuid::now_v7(),
-        author_id: user.id,
+        author_id: auth.current_user.id,
         title: payload.title,
         description: payload.description,
         created_at: current_date,
@@ -74,16 +58,31 @@ pub async fn create_comic(
     }
     .into_active_model()
     .insert(&db)
-    .await?;
+    .await
+    .map_err(|e| {
+        if let migration::DbErr::Query(sea_orm::RuntimeErr::SqlxError(sqlx::Error::Database(err))) =
+            e
+        {
+            match err.constraint() {
+                Some("comics_title_key") => {
+                    tracing::error!("{}", err);
+                    return ComicsError::Conflict(String::from(
+                        "comic with same title already exists",
+                    ));
+                }
+                _ => {
+                    tracing::error!("{}", err);
+                    return ComicsError::InternalServerError;
+                }
+            }
+        }
+        tracing::error!("{}", e);
+        ComicsError::InternalServerError
+    })?;
 
     let comic = ComicResponseBrief {
         id: comic.id,
-        author: UserResponseBrief {
-            id: user.id,
-            displayname: user.displayname,
-            username: user.username,
-            email: user.email,
-        },
+        author: auth.current_user,
         title: comic.title,
         description: comic.description,
         created_at: comic.created_at.to_string(),

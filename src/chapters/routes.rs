@@ -2,7 +2,7 @@ use std::io::SeekFrom;
 
 use axum::{
     extract::{Multipart, Path, Query, State},
-    Extension, Json,
+    Json,
 };
 use chrono::Utc;
 use futures::{FutureExt, TryStreamExt};
@@ -19,6 +19,7 @@ use tokio::{
 use tokio_util::io::ReaderStream;
 
 use crate::{
+    auth::AuthExtractor,
     comics::models::ImageResponse,
     entity::{self, chapter_pages::Entity as ChapterPage, chapters::Entity as Chapter},
     s3::{interface::Storage, Upload},
@@ -50,16 +51,15 @@ const ALLOWED_MIME_TYPES: [&str; 3] = ["image/jpeg", "image/jpg", "image/png"];
     ),
     tag = "Chapters API"
 )]
-#[axum::debug_handler]
 pub async fn create_chapter(
-    Extension(user): Extension<entity::users::Model>,
+    auth: AuthExtractor,
     State(db): State<DatabaseConnection>,
     Json(payload): Json<CreateChapter>,
 ) -> Result<Json<ChapterResponseBrief>, ChaptersError> {
     let current_date = Utc::now().naive_utc();
     let chapter = entity::chapters::Model {
         id: Uuid::now_v7(),
-        author_id: user.id,
+        author_id: auth.current_user.id,
         comic_id: payload.comic_id,
         number: payload.number,
         title: payload.title,
@@ -70,44 +70,31 @@ pub async fn create_chapter(
     .into_active_model()
     .insert(&db)
     .await
-    .map_err(|err| {
-        // tracing::debug!("error {:#?}", err);
-        match err {
-            migration::DbErr::Query(e) => match e {
-                sea_orm::RuntimeErr::SqlxError(sqlx_err) => match sqlx_err {
-                    sqlx::Error::Database(err) => match err.constraint() {
-                        Some("chapters_title_key") => {
-                            tracing::error!("{}", err);
-                            ChaptersError::Conflict(String::from(
-                                "chapter with same title already exists",
-                            ))
-                        }
-                        Some("chapters_comic_id_number_key") => {
-                            tracing::error!("{}", err);
-                            ChaptersError::Conflict(String::from(
-                                "chapter with same number already exists",
-                            ))
-                        }
-                        _ => {
-                            tracing::error!("{}", err);
-                            ChaptersError::InternalServerError
-                        }
-                    },
-                    _ => {
-                        tracing::error!("{}", sqlx_err);
-                        ChaptersError::InternalServerError
-                    }
-                },
-                sea_orm::RuntimeErr::Internal(internal_err) => {
-                    tracing::error!("DB internal error: {}", internal_err);
-                    ChaptersError::InternalServerError
+    .map_err(|e| {
+        if let migration::DbErr::Query(sea_orm::RuntimeErr::SqlxError(sqlx::Error::Database(err))) =
+            e
+        {
+            match err.constraint() {
+                Some("chapters_title_key") => {
+                    tracing::error!("{}", err);
+                    return ChaptersError::Conflict(String::from(
+                        "chapter with same title already exists",
+                    ));
                 }
-            },
-            _ => {
-                tracing::error!("DB error: {}", err);
-                ChaptersError::InternalServerError
+                Some("chapters_comic_id_number_key") => {
+                    tracing::error!("{}", err);
+                    return ChaptersError::Conflict(String::from(
+                        "chapter with same number already exists",
+                    ));
+                }
+                _ => {
+                    tracing::error!("{}", err);
+                    return ChaptersError::InternalServerError;
+                }
             }
         }
+        tracing::error!("DB error: {}", e);
+        ChaptersError::InternalServerError
     })?;
 
     Ok(Json(chapter.into()))
@@ -127,7 +114,7 @@ pub async fn create_chapter(
 )]
 #[axum::debug_handler(state = AppState)]
 pub async fn create_chapter_page(
-    Extension(user): Extension<entity::users::Model>,
+    auth: AuthExtractor,
     State(storage): State<Storage>,
     State(db): State<DatabaseConnection>,
     mut fields: Multipart,
@@ -256,7 +243,7 @@ pub async fn create_chapter_page(
                 let current_date = Utc::now().naive_utc();
                 let chapter_page = entity::chapter_pages::Model {
                     id: Uuid::now_v7(),
-                    author_id: user.id,
+                    author_id: auth.current_user.id,
                     comic_id: chapter_page.comic_id,
                     chapter_id: chapter_page.chapter_id,
                     number: chapter_page.number,

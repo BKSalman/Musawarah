@@ -4,26 +4,26 @@ use axum::{
         header::{AUTHORIZATION, CONTENT_TYPE},
         Method,
     },
+    middleware,
     routing::{get, post},
     Router,
 };
-use axum_login::{axum_sessions::SessionLayer, AuthLayer, RequireAuthorizationLayer};
+use axum_extra::extract::cookie::Key;
 use dotenv::dotenv;
 use musawarah::{
-    auth::SeaORMUserStore,
     chapters::routes::{create_chapter, create_chapter_page, get_chapter, get_chapters_cursor},
     comics::routes::{create_comic, get_comic, get_comics_cursor},
-    entity,
     s3::helpers::setup_storage,
-    sessions::SeaORMSessionStore,
+    sessions::refresh_session,
     users::routes::{create_user, get_user, get_user_comics, login, logout},
-    ApiDoc, AppState,
+    ApiDoc, AppState, COOKIES_SECRET,
 };
-use rand::RngCore;
+use rand::Rng;
 use std::{
     env,
     net::{Ipv4Addr, SocketAddr},
 };
+use tower_cookies::CookieManagerLayer;
 use tower_http::{
     cors::{Any, CorsLayer},
     limit::RequestBodyLimitLayer,
@@ -34,7 +34,6 @@ use tracing_subscriber::{
 };
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
-use uuid::Uuid;
 
 #[tokio::main]
 async fn main() {
@@ -56,44 +55,28 @@ async fn main() {
         .await
         .expect("Database connection");
 
-    let session_store = SeaORMSessionStore::new(&db);
-
-    let mut secret = [0u8; 64];
-
-    rand::thread_rng().fill_bytes(&mut secret);
-
-    #[allow(unused_mut)]
-    let mut session_layer = SessionLayer::new(session_store, &secret);
-
-    #[cfg(not(debug_assertions))]
-    {
-        session_layer = session_layer.with_secure(true);
-    }
-
-    type NoRoleAuthLayer = AuthLayer<SeaORMUserStore, Uuid, entity::users::Model, ()>;
-    type RequireAuth = RequireAuthorizationLayer<Uuid, entity::users::Model, ()>;
-
-    let user_store = SeaORMUserStore::new(&db);
-    let auth_layer = NoRoleAuthLayer::new(user_store, &secret);
-
     let app_state = AppState {
         db,
         storage: setup_storage().expect("storage"),
     };
 
+    // TODO: add to config file
+    let mut secret = [0u8; 64];
+    rand::thread_rng().fill(&mut secret);
+
+    COOKIES_SECRET.set(Key::from(&secret)).ok();
+
     let user_router = Router::new()
         .route("/comics/:username", get(get_user_comics))
         .route("/logout", get(logout))
-        // prevents non-authenticated users from accessing this route
-        .route_layer(RequireAuth::login())
         .route("/:user_id", get(get_user))
         .route("/", post(create_user))
         .route("/login", post(login));
 
     let comics_router = Router::new()
         .route("/", post(create_comic))
-        .route("/", get(get_comics_cursor))
-        .route("/:comic_id", get(get_comic));
+        .route("/:comic_id", get(get_comic))
+        .route("/", get(get_comics_cursor));
 
     let chapters_router = Router::new()
         .layer(DefaultBodyLimit::disable())
@@ -101,7 +84,6 @@ async fn main() {
         .layer(RequestBodyLimitLayer::new(10 * 1024 * 1024 /* 10mb */))
         .route("/", post(create_chapter))
         .route("/page", post(create_chapter_page))
-        .route_layer(RequireAuth::login())
         .route("/:comic_id", get(get_chapters_cursor))
         .route("/s/:chapter_id", get(get_chapter));
 
@@ -119,8 +101,11 @@ async fn main() {
         .nest("/api/v1/chapters", chapters_router)
         .layer(TraceLayer::new_for_http())
         .layer(cors)
-        .layer(auth_layer)
-        .layer(session_layer)
+        .layer(middleware::from_fn_with_state(
+            app_state.clone(),
+            refresh_session,
+        ))
+        .layer(CookieManagerLayer::new())
         .with_state(app_state);
 
     let addr = SocketAddr::from((Ipv4Addr::UNSPECIFIED, 6060));

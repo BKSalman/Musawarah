@@ -22,6 +22,9 @@ pub enum UsersError {
     #[error("user has no posts")]
     HasNoPosts,
 
+    #[error("already logged in")]
+    AlreadyLoggedIn,
+
     #[error("internal server error")]
     SeaORM(#[from] sea_orm::error::DbErr),
 
@@ -91,6 +94,12 @@ impl IntoResponse for UsersError {
                     },
                 )
             }
+            UsersError::AlreadyLoggedIn => (
+                StatusCode::BAD_REQUEST,
+                ErrorHandlingResponse {
+                    errors: vec![self.to_string()],
+                },
+            ),
             UsersError::Validator(errors) => {
                 let errors = errors
                     .flatten()

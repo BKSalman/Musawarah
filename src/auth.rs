@@ -1,36 +1,42 @@
-use axum::{async_trait, http::StatusCode, response::IntoResponse, Json};
-use axum_login::{secrecy::SecretVec, AuthUser, UserStore};
-
-use migration::DbErr;
-use sea_orm::{DatabaseConnection, EntityTrait};
+use async_trait::async_trait;
+use axum::{
+    extract::FromRequestParts, http::StatusCode, response::IntoResponse, Json, RequestPartsExt,
+};
+use chrono::Utc;
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+use tower_cookies::{Cookie, Cookies};
 use uuid::Uuid;
 
-use crate::{entity, ErrorHandlingResponse};
+use crate::{
+    entity, sessions::SESSION_COOKIE_NAME, users::models::UserResponseBrief, AppState,
+    ErrorHandlingResponse, COOKIES_SECRET,
+};
 
-pub type AuthContext =
-    axum_login::extractors::AuthContext<Uuid, entity::users::Model, SeaORMUserStore>;
+pub struct AuthExtractor {
+    pub current_user: UserResponseBrief,
+    pub session_id: Uuid,
+}
 
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, Debug, Clone)]
 pub enum AuthError {
+    #[error("something went wrong")]
+    SomethinWentWrong,
+
     #[error("invalid session")]
     InvalidSession,
-
-    #[error("something went wrong")]
-    InternalServerError(#[from] DbErr),
 }
 
 impl IntoResponse for AuthError {
     fn into_response(self) -> axum::response::Response {
-        tracing::error!("auth error: {}", self);
-        let (status, error_message) = match self {
-            AuthError::InvalidSession => (
-                StatusCode::UNAUTHORIZED,
+        let (error_status, error_message) = match self {
+            AuthError::SomethinWentWrong => (
+                StatusCode::INTERNAL_SERVER_ERROR,
                 ErrorHandlingResponse {
                     errors: vec![self.to_string()],
                 },
             ),
-            AuthError::InternalServerError(_) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
+            AuthError::InvalidSession => (
+                StatusCode::UNAUTHORIZED,
                 ErrorHandlingResponse {
                     errors: vec![self.to_string()],
                 },
@@ -39,48 +45,90 @@ impl IntoResponse for AuthError {
 
         let body = Json(error_message);
 
-        (status, body).into_response()
-    }
-}
-
-impl<Role> AuthUser<Uuid, Role> for entity::users::Model
-where
-    Role: PartialOrd + PartialEq + Clone + Send + Sync + 'static,
-{
-    fn get_id(&self) -> Uuid {
-        self.id
-    }
-
-    fn get_password_hash(&self) -> axum_login::secrecy::SecretVec<u8> {
-        SecretVec::new(self.password.clone().into())
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct SeaORMUserStore {
-    conn: DatabaseConnection,
-}
-
-impl SeaORMUserStore {
-    pub fn new(conn: &DatabaseConnection) -> Self {
-        Self { conn: conn.clone() }
+        (error_status, body).into_response()
     }
 }
 
 #[async_trait]
-impl<Role> UserStore<Uuid, Role> for SeaORMUserStore
-where
-    Role: PartialOrd + PartialEq + Clone + Send + Sync + 'static,
-{
-    type User = entity::users::Model;
+impl FromRequestParts<AppState> for AuthExtractor {
+    type Rejection = AuthError;
 
-    async fn load_user(&self, user_id: &Uuid) -> Result<Option<Self::User>, eyre::Report> {
-        let user = entity::users::Entity::find_by_id(*user_id)
-            .one(&self.conn)
-            .await?;
-        match user {
-            Some(u) => Ok(Some(u)),
-            None => Ok(None),
+    async fn from_request_parts(
+        parts: &mut axum::http::request::Parts,
+        state: &AppState,
+    ) -> std::result::Result<Self, Self::Rejection> {
+        let cookies =
+            parts
+                .extract::<Cookies>()
+                .await
+                .map_err(|(_error_status, error_message)| {
+                    tracing::error!("auth-extractor: failed to get cookies: {error_message}");
+                    AuthError::InvalidSession
+                })?;
+
+        let key = COOKIES_SECRET.get().expect("cookies secret key");
+
+        #[allow(unused_mut)]
+        let mut cookie_to_be_removed = Cookie::build(SESSION_COOKIE_NAME, "")
+            .path("/")
+            .http_only(true);
+
+        #[cfg(not(debug_assertions))]
+        {
+            cookie_to_be_removed = cookie_to_be_removed
+                // TODO: use the actual musawarah domain
+                .domain("salmanforgot.com")
+                .secure(true);
         }
+
+        #[cfg(debug_assertions)]
+        {
+            cookie_to_be_removed = cookie_to_be_removed.domain("localhost");
+        }
+
+        let session_id = cookies
+            .private(key)
+            .get(SESSION_COOKIE_NAME)
+            .ok_or_else(|| {
+                tracing::error!("auth-extractor: failed to get session_id cookie");
+                cookies.remove(cookie_to_be_removed.clone().finish());
+                AuthError::InvalidSession
+            })?;
+
+        let session_id = Uuid::parse_str(session_id.value()).map_err(|e| {
+            tracing::error!("auth-extractor: invalid session_id: {e}");
+            // FIXME: this is weird
+            cookies.remove(cookie_to_be_removed.clone().finish());
+            AuthError::InvalidSession
+        })?;
+
+        let (session, Some(user)) = entity::sessions::Entity::find_by_id(session_id)
+            .filter(entity::sessions::Column::ExpiresAt.gt(Utc::now().naive_utc()))
+            .find_also_related(entity::users::Entity)
+            .one(&state.db)
+            .await
+            .map_err(|e| {
+                tracing::error!("auth-extractor: failed to fetch session: {e}");
+                cookies.remove(cookie_to_be_removed.clone().finish());
+                AuthError::InvalidSession
+            })?
+            .ok_or_else(|| {
+                tracing::error!("auth-extractor: failed to fetch active (not expired) session");
+                cookies.remove(cookie_to_be_removed.finish());
+                AuthError::InvalidSession
+            })? else {
+                tracing::error!("auth-extractor: failed to fetch user");
+                return Err(AuthError::SomethinWentWrong);
+            };
+
+        Ok(AuthExtractor {
+            current_user: UserResponseBrief {
+                id: user.id,
+                displayname: user.displayname,
+                username: user.username,
+                email: user.email,
+            },
+            session_id: session.id,
+        })
     }
 }
