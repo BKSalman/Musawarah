@@ -55,6 +55,6 @@ axum_garde = "0.11.2"
 chrono = "0.4.24"
 itertools = "0.10.5"
 eyre = "0.6.8"
-axum-extra = { version = "0.7.4", features = ["cookie-private"] }
+axum-extra = { version = "0.7.4" }
 time = "0.3.21"
 tower-cookies = { version = "0.9.0", features = ["private"] }
