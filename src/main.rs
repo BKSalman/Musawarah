@@ -8,7 +8,6 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use axum_extra::extract::cookie::Key;
 use dotenv::dotenv;
 use musawarah::{
     chapters::routes::{create_chapter, create_chapter_page, get_chapter, get_chapters_cursor},
@@ -23,7 +22,7 @@ use std::{
     env,
     net::{Ipv4Addr, SocketAddr},
 };
-use tower_cookies::CookieManagerLayer;
+use tower_cookies::{CookieManagerLayer, Key};
 use tower_http::{
     cors::{Any, CorsLayer},
     limit::RequestBodyLimitLayer,

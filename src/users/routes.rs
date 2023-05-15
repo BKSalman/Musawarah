@@ -8,7 +8,6 @@ use axum::{
 };
 use chrono::{Duration, Utc};
 use garde::Validate;
-use itertools::multizip;
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait, IntoActiveModel,
     LoaderTrait, ModelTrait, QueryFilter, QuerySelect,
@@ -300,18 +299,18 @@ pub async fn get_user_comics(
         .await?;
 
     let chapters = comics.load_many(entity::chapters::Entity, &db).await?;
-    let users = comics.load_one(entity::users::Entity, &db).await?;
 
-    let comics: Result<Vec<ComicResponseBrief>, UsersError> = multizip((comics, chapters, users))
-        .map(|(comic, chapters, user)| {
-            let user = user.ok_or(UsersError::InternalServerError)?;
+    let comics: Result<Vec<ComicResponseBrief>, UsersError> = comics
+        .into_iter()
+        .zip(chapters.into_iter())
+        .map(move |(comic, chapters)| {
             Ok(ComicResponseBrief {
                 id: comic.id,
                 author: UserResponseBrief {
                     id: user.id,
-                    displayname: user.displayname,
-                    username: user.username,
-                    email: user.email,
+                    displayname: user.clone().displayname,
+                    username: user.clone().username,
+                    email: user.clone().email,
                 },
                 title: comic.title,
                 description: comic.description,
