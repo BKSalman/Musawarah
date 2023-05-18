@@ -1,21 +1,17 @@
 use axum::{
-    extract::DefaultBodyLimit,
     http::{
         header::{AUTHORIZATION, CONTENT_TYPE},
         Method,
     },
     middleware,
-    routing::{get, post},
+    routing::get,
     Router,
 };
 use dotenv::dotenv;
 use musawarah::{
-    chapters::routes::{create_chapter, create_chapter_page, get_chapter, get_chapters_cursor},
-    comics::routes::{create_comic, get_comic, get_comics_cursor},
-    s3::helpers::setup_storage,
-    sessions::refresh_session,
-    users::routes::{create_user, get_user, get_user_comics, login, logout},
-    ApiDoc, AppState, COOKIES_SECRET,
+    chapters::routes::chapters_router, comic_genres::routes::comic_genres_router,
+    comics::routes::comics_router, s3::helpers::setup_storage, sessions::refresh_session,
+    users::routes::users_router, ApiDoc, AppState, COOKIES_SECRET,
 };
 use rand::Rng;
 use std::{
@@ -25,7 +21,6 @@ use std::{
 use tower_cookies::{CookieManagerLayer, Key};
 use tower_http::{
     cors::{Any, CorsLayer},
-    limit::RequestBodyLimitLayer,
     trace::TraceLayer,
 };
 use tracing_subscriber::{
@@ -65,27 +60,6 @@ async fn main() {
 
     COOKIES_SECRET.set(Key::from(&secret)).ok();
 
-    let user_router = Router::new()
-        .route("/comics/:username", get(get_user_comics))
-        .route("/logout", get(logout))
-        .route("/:user_id", get(get_user))
-        .route("/", post(create_user))
-        .route("/login", post(login));
-
-    let comics_router = Router::new()
-        .route("/", post(create_comic))
-        .route("/:comic_id", get(get_comic))
-        .route("/", get(get_comics_cursor));
-
-    let chapters_router = Router::new()
-        .layer(DefaultBodyLimit::disable())
-        // TODO: image compression
-        .layer(RequestBodyLimitLayer::new(10 * 1024 * 1024 /* 10mb */))
-        .route("/", post(create_chapter))
-        .route("/page", post(create_chapter_page))
-        .route("/:comic_id", get(get_chapters_cursor))
-        .route("/s/:chapter_id", get(get_chapter));
-
     let cors = CorsLayer::new()
         .allow_methods([Method::GET, Method::POST])
         .allow_headers([AUTHORIZATION, CONTENT_TYPE])
@@ -95,9 +69,10 @@ async fn main() {
     let app = Router::new()
         .merge(SwaggerUi::new("/swagger-ui").url("/api-doc/openapi.json", ApiDoc::openapi()))
         .route("/", get(root))
-        .nest("/api/v1/users", user_router)
-        .nest("/api/v1/comics", comics_router)
-        .nest("/api/v1/chapters", chapters_router)
+        .nest("/api/v1/users", users_router())
+        .nest("/api/v1/comics", comics_router())
+        .nest("/api/v1/comic-genres", comic_genres_router())
+        .nest("/api/v1/chapters", chapters_router())
         .layer(TraceLayer::new_for_http())
         .layer(cors)
         .layer(middleware::from_fn_with_state(
