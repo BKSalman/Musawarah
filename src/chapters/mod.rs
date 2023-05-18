@@ -7,7 +7,7 @@ use sea_orm::TransactionError;
 use std::error::Error as StdError;
 // use tracing::debug;
 
-use crate::ErrorHandlingResponse;
+use crate::ErrorResponse;
 
 #[derive(thiserror::Error, Debug)]
 pub enum ChaptersError {
@@ -59,7 +59,7 @@ impl IntoResponse for ChaptersError {
             }
         };
 
-        let body = Json(ErrorHandlingResponse {
+        let body = Json(ErrorResponse {
             errors: error_message,
         });
 

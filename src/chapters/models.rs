@@ -6,7 +6,7 @@ use ts_rs::TS;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::{comics::models::ImageResponse, entity};
+use crate::{common::models::ImageResponse, entity};
 
 #[derive(Serialize, Deserialize, ToSchema, TS, Debug)]
 #[ts(export)]

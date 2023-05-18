@@ -1,8 +1,9 @@
 use std::io::SeekFrom;
 
 use axum::{
-    extract::{Multipart, Path, Query, State},
-    Json,
+    extract::{DefaultBodyLimit, Multipart, Path, Query, State},
+    routing::{get, post},
+    Json, Router,
 };
 use chrono::Utc;
 use futures::{FutureExt, TryStreamExt};
@@ -17,10 +18,11 @@ use tokio::{
     io::{AsyncSeekExt, AsyncWriteExt},
 };
 use tokio_util::io::ReaderStream;
+use tower_http::limit::RequestBodyLimitLayer;
 
 use crate::{
     auth::AuthExtractor,
-    comics::models::ImageResponse,
+    common::models::ImageResponse,
     entity::{self, chapter_pages::Entity as ChapterPage, chapters::Entity as Chapter},
     s3::{interface::Storage, Upload},
     AppState, PaginationParams,
@@ -38,6 +40,17 @@ use super::{
 use uuid::Uuid;
 
 const ALLOWED_MIME_TYPES: [&str; 3] = ["image/jpeg", "image/jpg", "image/png"];
+
+pub fn chapters_router() -> Router<AppState> {
+    Router::new()
+        .layer(DefaultBodyLimit::disable())
+        // TODO: image compression
+        .layer(RequestBodyLimitLayer::new(10 * 1024 * 1024 /* 10mb */))
+        .route("/", post(create_chapter))
+        .route("/page", post(create_chapter_page))
+        .route("/:comic_id", get(get_chapters_cursor))
+        .route("/s/:chapter_id", get(get_chapter))
+}
 
 /// Create a chapter
 #[utoipa::path(
