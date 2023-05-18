@@ -9,6 +9,8 @@ mod m20230425_040131_create_comments_table;
 mod m20230425_040303_create_comment_parents_table;
 mod m20230426_121507_create_user_roles_table;
 mod m20230506_092634_create_session_table;
+mod m20230517_155027_create_comic_categories_table;
+mod m20230517_160145_create_comics_categories_mapping_table;
 
 pub struct Migrator;
 
@@ -25,6 +27,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20230425_040303_create_comment_parents_table::Migration),
             Box::new(m20230426_121507_create_user_roles_table::Migration),
             Box::new(m20230506_092634_create_session_table::Migration),
+            Box::new(m20230517_155027_create_comic_categories_table::Migration),
+            Box::new(m20230517_160145_create_comics_categories_mapping_table::Migration),
         ]
     }
 }
