@@ -23,7 +23,7 @@ pub enum Relation {
         belongs_to = "super::chapters::Entity",
         from = "Column::ChapterId",
         to = "super::chapters::Column::Id",
-        on_update = "NoAction",
+        on_update = "Cascade",
         on_delete = "Cascade"
     )]
     Chapters,
@@ -31,7 +31,7 @@ pub enum Relation {
         belongs_to = "super::comics::Entity",
         from = "Column::ComicId",
         to = "super::comics::Column::Id",
-        on_update = "NoAction",
+        on_update = "Cascade",
         on_delete = "Cascade"
     )]
     Comics,
@@ -39,7 +39,7 @@ pub enum Relation {
         belongs_to = "super::users::Entity",
         from = "Column::AuthorId",
         to = "super::users::Column::Id",
-        on_update = "NoAction",
+        on_update = "Cascade",
         on_delete = "Cascade"
     )]
     Users,

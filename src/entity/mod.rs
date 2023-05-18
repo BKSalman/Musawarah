@@ -4,7 +4,9 @@ pub mod prelude;
 
 pub mod chapter_pages;
 pub mod chapters;
+pub mod comic_genres;
 pub mod comics;
+pub mod comics_genres_mapping;
 pub mod comment_parents_children;
 pub mod comments;
 pub mod profile_images;

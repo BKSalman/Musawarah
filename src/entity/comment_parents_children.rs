@@ -17,16 +17,16 @@ pub enum Relation {
         belongs_to = "super::comments::Entity",
         from = "Column::ChildCommentId",
         to = "super::comments::Column::Id",
-        on_update = "NoAction",
-        on_delete = "NoAction"
+        on_update = "Cascade",
+        on_delete = "Cascade"
     )]
     Comments2,
     #[sea_orm(
         belongs_to = "super::comments::Entity",
         from = "Column::ParentCommentId",
         to = "super::comments::Column::Id",
-        on_update = "NoAction",
-        on_delete = "NoAction"
+        on_update = "Cascade",
+        on_delete = "Cascade"
     )]
     Comments1,
 }

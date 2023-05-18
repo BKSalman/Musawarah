@@ -2,7 +2,9 @@
 
 pub use super::chapter_pages::Entity as ChapterPages;
 pub use super::chapters::Entity as Chapters;
+pub use super::comic_genres::Entity as ComicGenres;
 pub use super::comics::Entity as Comics;
+pub use super::comics_genres_mapping::Entity as ComicsGenresMapping;
 pub use super::comment_parents_children::Entity as CommentParentsChildren;
 pub use super::comments::Entity as Comments;
 pub use super::profile_images::Entity as ProfileImages;

@@ -3,19 +3,24 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
-#[sea_orm(table_name = "comments")]
+#[sea_orm(table_name = "comics_genres_mapping")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
-    pub id: Uuid,
-    pub content: String,
-    pub commenter_id: Uuid,
     pub comic_id: Uuid,
-    pub created_at: DateTime,
-    pub updated_at: DateTime,
+    #[sea_orm(primary_key, auto_increment = false)]
+    pub genre_id: i32,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
+    #[sea_orm(
+        belongs_to = "super::comic_genres::Entity",
+        from = "Column::GenreId",
+        to = "super::comic_genres::Column::Id",
+        on_update = "Cascade",
+        on_delete = "Cascade"
+    )]
+    ComicGenres,
     #[sea_orm(
         belongs_to = "super::comics::Entity",
         from = "Column::ComicId",
@@ -24,25 +29,17 @@ pub enum Relation {
         on_delete = "Cascade"
     )]
     Comics,
-    #[sea_orm(
-        belongs_to = "super::users::Entity",
-        from = "Column::CommenterId",
-        to = "super::users::Column::Id",
-        on_update = "Cascade",
-        on_delete = "Cascade"
-    )]
-    Users,
+}
+
+impl Related<super::comic_genres::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::ComicGenres.def()
+    }
 }
 
 impl Related<super::comics::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Comics.def()
-    }
-}
-
-impl Related<super::users::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Users.def()
     }
 }
 
