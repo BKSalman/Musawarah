@@ -12,7 +12,9 @@ use uuid::Uuid;
 
 pub mod auth;
 pub mod chapters;
+pub mod comic_genres;
 pub mod comics;
+pub mod common;
 pub mod entity;
 pub mod s3;
 pub mod sessions;
@@ -48,11 +50,11 @@ pub static COOKIES_SECRET: OnceCell<Key> = OnceCell::new();
         // chapters::routes::update_chapter_page,
     ),
     components(
+        schemas(common::models::ImageResponse),
         schemas(comics::models::CreateComic),
         schemas(comics::models::UpdateComic),
         schemas(comics::models::ComicResponse),
-        schemas(comics::models::ComicResponseBrief),
-        schemas(comics::models::ImageResponse),
+        schemas(comic_genres::models::ComicGenre),
         schemas(chapters::models::CreateChapter),
         schemas(chapters::models::UpdateChapter),
         schemas(chapters::models::CreateChapterPage),
@@ -64,13 +66,14 @@ pub static COOKIES_SECRET: OnceCell<Key> = OnceCell::new();
         schemas(users::models::CreateUser),
         schemas(users::models::UserLogin),
         schemas(users::models::UserToken),
-        schemas(ErrorHandlingResponse),
+        schemas(ErrorResponse),
     ),
     modifiers(&SecurityAddon),
     tags(
         (name = "Users API"),
         (name = "Comics API"),
         (name = "Chapters API"),
+        (name = "Comic Genres API"),
     )
 )]
 
@@ -85,14 +88,14 @@ pub struct PaginationParams {
 }
 
 #[derive(Serialize, Deserialize, ToSchema, Debug)]
-pub struct ErrorHandlingResponse {
+pub struct ErrorResponse {
     pub errors: Vec<String>,
 }
 
-impl IntoResponse for ErrorHandlingResponse {
+impl IntoResponse for ErrorResponse {
     fn into_response(self) -> axum::response::Response {
         serde_json::to_string(&self)
-            .expect("ErrorHandlingResponse as json")
+            .expect("ErrorResponse as json")
             .into_response()
     }
 }
@@ -107,28 +110,3 @@ impl Modify for SecurityAddon {
         }
     }
 }
-
-// TODO: add this
-
-// #[derive(thiserror::Error, Debug)]
-// pub enum CommonErrors {
-//     #[error("internal server error")]
-//     InternalServerError,
-// }
-
-// impl IntoResponse for CommonErrors {
-//     fn into_response(self) -> axum::response::Response {
-//         let (status, error_message) = match self {
-//             CommonErrors::InternalServerError => (
-//                 StatusCode::INTERNAL_SERVER_ERROR,
-//                 ErrorHandlingResponse {
-//                     errors: vec![self.to_string()],
-//                 },
-//             ),
-//         };
-
-//         let body = Json(error_message);
-
-//         (status, body).into_response()
-//     }
-// }

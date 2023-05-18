@@ -11,7 +11,7 @@ use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseConnection};
 use tower_cookies::Cookies;
 use uuid::Uuid;
 
-use crate::{entity, AppState, ErrorHandlingResponse, COOKIES_SECRET};
+use crate::{entity, AppState, ErrorResponse, COOKIES_SECRET};
 
 pub const SESSION_COOKIE_NAME: &str = "session_id";
 
@@ -33,13 +33,13 @@ impl IntoResponse for SessionError {
         let (error_status, error_message) = match self {
             SessionError::SomethingWentWrong => (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                ErrorHandlingResponse {
+                ErrorResponse {
                     errors: vec![self.to_string()],
                 },
             ),
             SessionError::InvalidSession => (
                 StatusCode::UNAUTHORIZED,
-                ErrorHandlingResponse {
+                ErrorResponse {
                     errors: vec![self.to_string()],
                 },
             ),

@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 use crate::{
     entity, sessions::SESSION_COOKIE_NAME, users::models::UserResponseBrief, AppState,
-    ErrorHandlingResponse, COOKIES_SECRET,
+    ErrorResponse, COOKIES_SECRET,
 };
 
 pub struct AuthExtractor {
@@ -31,13 +31,13 @@ impl IntoResponse for AuthError {
         let (error_status, error_message) = match self {
             AuthError::SomethinWentWrong => (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                ErrorHandlingResponse {
+                ErrorResponse {
                     errors: vec![self.to_string()],
                 },
             ),
             AuthError::InvalidSession => (
                 StatusCode::UNAUTHORIZED,
-                ErrorHandlingResponse {
+                ErrorResponse {
                     errors: vec![self.to_string()],
                 },
             ),
