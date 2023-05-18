@@ -37,7 +37,9 @@ impl MigrationTrait for Migration {
                                 CommentParentsChildren::Table,
                                 CommentParentsChildren::ParentCommentId,
                             )
-                            .to(Comments::Table, Comments::Id),
+                            .to(Comments::Table, Comments::Id)
+                            .on_delete(ForeignKeyAction::Cascade)
+                            .on_update(ForeignKeyAction::Cascade),
                     )
                     .foreign_key(
                         ForeignKey::create()
@@ -46,7 +48,9 @@ impl MigrationTrait for Migration {
                                 CommentParentsChildren::Table,
                                 CommentParentsChildren::ChildCommentId,
                             )
-                            .to(Comments::Table, Comments::Id),
+                            .to(Comments::Table, Comments::Id)
+                            .on_delete(ForeignKeyAction::Cascade)
+                            .on_update(ForeignKeyAction::Cascade),
                     )
                     .to_owned(),
             )

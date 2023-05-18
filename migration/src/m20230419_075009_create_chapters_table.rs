@@ -28,14 +28,16 @@ impl MigrationTrait for Migration {
                             .name("fk-chapters-author_id")
                             .from(Chapters::Table, Chapters::AuthorId)
                             .to(Users::Table, Users::Id)
-                            .on_delete(ForeignKeyAction::Cascade),
+                            .on_delete(ForeignKeyAction::Cascade)
+                            .on_update(ForeignKeyAction::Cascade),
                     )
                     .foreign_key(
                         ForeignKey::create()
                             .name("fk-chapters-comic_id")
                             .from(Chapters::Table, Chapters::ComicId)
                             .to(Comics::Table, Comics::Id)
-                            .on_delete(ForeignKeyAction::Cascade),
+                            .on_delete(ForeignKeyAction::Cascade)
+                            .on_update(ForeignKeyAction::Cascade),
                     )
                     .index(
                         Index::create()

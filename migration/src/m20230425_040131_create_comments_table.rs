@@ -27,14 +27,16 @@ impl MigrationTrait for Migration {
                             .name("fk-comments-commenter_id")
                             .from(Comments::Table, Comments::CommenterId)
                             .to(Users::Table, Users::Id)
-                            .on_delete(ForeignKeyAction::Cascade),
+                            .on_delete(ForeignKeyAction::Cascade)
+                            .on_update(ForeignKeyAction::Cascade),
                     )
                     .foreign_key(
                         ForeignKey::create()
                             .name("fk-comments-comic_id")
                             .from(Comments::Table, Comments::ComicId)
                             .to(Comics::Table, Comics::Id)
-                            .on_delete(ForeignKeyAction::Cascade),
+                            .on_delete(ForeignKeyAction::Cascade)
+                            .on_update(ForeignKeyAction::Cascade),
                     )
                     .to_owned(),
             )

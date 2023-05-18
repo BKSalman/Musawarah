@@ -26,7 +26,8 @@ impl MigrationTrait for Migration {
                         ForeignKey::create()
                             .from_col(UserRoles::UserId)
                             .to(Users::Table, Users::Id)
-                            .on_delete(ForeignKeyAction::Cascade),
+                            .on_delete(ForeignKeyAction::Cascade)
+                            .on_update(ForeignKeyAction::Cascade),
                     )
                     .index(
                         Index::create()

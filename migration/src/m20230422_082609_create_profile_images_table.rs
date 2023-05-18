@@ -30,7 +30,9 @@ impl MigrationTrait for Migration {
                         ForeignKey::create()
                             .name("fk-profile_images-user_id")
                             .from(ProfileImages::Table, ProfileImages::UserId)
-                            .to(Users::Table, Users::Id),
+                            .to(Users::Table, Users::Id)
+                            .on_delete(ForeignKeyAction::Cascade)
+                            .on_update(ForeignKeyAction::Cascade),
                     )
                     .to_owned(),
             )
