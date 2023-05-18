@@ -1,6 +1,6 @@
 use axum::{http::StatusCode, response::IntoResponse, Json};
 
-use crate::ErrorHandlingResponse;
+use crate::ErrorResponse;
 
 pub mod models;
 pub mod routes;
@@ -45,43 +45,43 @@ impl IntoResponse for UsersError {
         let (status, error_message) = match self {
             UsersError::UserNotFound => (
                 StatusCode::NOT_FOUND,
-                ErrorHandlingResponse {
+                ErrorResponse {
                     errors: vec![self.to_string()],
                 },
             ),
             UsersError::HasNoPosts => (
                 StatusCode::NOT_FOUND,
-                ErrorHandlingResponse {
+                ErrorResponse {
                     errors: vec![String::from("user has no posts")],
                 },
             ),
             UsersError::BadRequest => (
                 StatusCode::BAD_REQUEST,
-                ErrorHandlingResponse {
+                ErrorResponse {
                     errors: vec![self.to_string()],
                 },
             ),
             UsersError::Conflict(_) => (
                 StatusCode::CONFLICT,
-                ErrorHandlingResponse {
+                ErrorResponse {
                     errors: vec![self.to_string()],
                 },
             ),
             UsersError::InvalidCredentials => (
                 StatusCode::UNAUTHORIZED,
-                ErrorHandlingResponse {
+                ErrorResponse {
                     errors: vec![self.to_string()],
                 },
             ),
             UsersError::SeaORM(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                ErrorHandlingResponse {
+                ErrorResponse {
                     errors: vec![self.to_string()],
                 },
             ),
             UsersError::InternalServerError => (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                ErrorHandlingResponse {
+                ErrorResponse {
                     errors: vec![self.to_string()],
                 },
             ),
@@ -89,14 +89,14 @@ impl IntoResponse for UsersError {
                 // TODO: add logging for this
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    ErrorHandlingResponse {
+                    ErrorResponse {
                         errors: vec![self.to_string()],
                     },
                 )
             }
             UsersError::AlreadyLoggedIn => (
                 StatusCode::BAD_REQUEST,
-                ErrorHandlingResponse {
+                ErrorResponse {
                     errors: vec![self.to_string()],
                 },
             ),
@@ -107,7 +107,7 @@ impl IntoResponse for UsersError {
                     .map(|(path, error)| format!("{path}: {error}"))
                     .collect::<Vec<String>>();
 
-                (StatusCode::BAD_REQUEST, ErrorHandlingResponse { errors })
+                (StatusCode::BAD_REQUEST, ErrorResponse { errors })
             }
         };
 

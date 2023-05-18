@@ -4,10 +4,12 @@ use argon2::{
 };
 use axum::{
     extract::{Path, Query, State},
-    Json,
+    routing::{get, post},
+    Json, Router,
 };
 use chrono::{Duration, Utc};
 use garde::Validate;
+use itertools::multizip;
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait, IntoActiveModel,
     LoaderTrait, ModelTrait, QueryFilter, QuerySelect,
@@ -17,18 +19,24 @@ use tower_cookies::{cookie::Cookie, Cookies};
 use uuid::Uuid;
 
 use crate::{
-    auth::AuthExtractor,
-    chapters::models::ChapterResponseBrief,
-    comics::models::{ComicResponseBrief, ImageResponse},
-    entity,
-    sessions::SESSION_COOKIE_NAME,
-    AppState, PaginationParams, COOKIES_SECRET,
+    auth::AuthExtractor, chapters::models::ChapterResponseBrief, comic_genres::models::ComicGenre,
+    comics::models::ComicResponse, common::models::ImageResponse, entity,
+    sessions::SESSION_COOKIE_NAME, AppState, PaginationParams, COOKIES_SECRET,
 };
 
 use super::{
     models::{CreateUser, UserLogin, UserResponse, UserResponseBrief},
     UsersError,
 };
+
+pub fn users_router() -> Router<AppState> {
+    Router::new()
+        .route("/comics/:username", get(get_user_comics))
+        .route("/logout", get(logout))
+        .route("/:user_id", get(get_user))
+        .route("/", post(create_user))
+        .route("/login", post(login))
+}
 
 /// Create User
 #[utoipa::path(
@@ -144,6 +152,7 @@ pub async fn create_user(
     ),
     tag = "Users API"
 )]
+#[axum::debug_handler(state = AppState)]
 pub async fn login(
     State(db): State<DatabaseConnection>,
     cookies: Cookies,
@@ -223,6 +232,7 @@ pub async fn login(
     ),
     tag = "Users API"
 )]
+#[axum::debug_handler(state = AppState)]
 pub async fn logout(
     cookies: Cookies,
     State(db): State<DatabaseConnection>,
@@ -278,7 +288,7 @@ pub async fn get_user_comics(
     State(db): State<DatabaseConnection>,
     Path(username): Path<String>,
     Query(pagination): Query<PaginationParams>,
-) -> Result<Json<Vec<ComicResponseBrief>>, UsersError> {
+) -> Result<Json<Vec<ComicResponse>>, UsersError> {
     tracing::debug!("get {}'s comics", username);
 
     let Some(user) = entity::users::Entity::find()
@@ -299,12 +309,17 @@ pub async fn get_user_comics(
         .await?;
 
     let chapters = comics.load_many(entity::chapters::Entity, &db).await?;
+    let genres = comics
+        .load_many_to_many(
+            entity::comic_genres::Entity,
+            entity::comics_genres_mapping::Entity,
+            &db,
+        )
+        .await?;
 
-    let comics: Result<Vec<ComicResponseBrief>, UsersError> = comics
-        .into_iter()
-        .zip(chapters.into_iter())
-        .map(move |(comic, chapters)| {
-            Ok(ComicResponseBrief {
+    let comics: Result<Vec<ComicResponse>, UsersError> = multizip((comics, genres, chapters))
+        .map(move |(comic, genres, chapters)| {
+            Ok(ComicResponse {
                 id: comic.id,
                 author: UserResponseBrief {
                     id: user.id,
@@ -321,6 +336,13 @@ pub async fn get_user_comics(
                         id: chapter.id,
                         description: chapter.description,
                         number: chapter.number,
+                    })
+                    .collect(),
+                genres: genres
+                    .into_iter()
+                    .map(|genre| ComicGenre {
+                        id: genre.id,
+                        name: genre.name,
                     })
                     .collect(),
             })
