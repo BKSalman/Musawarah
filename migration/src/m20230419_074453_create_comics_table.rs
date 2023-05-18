@@ -14,7 +14,12 @@ impl MigrationTrait for Migration {
                     .table(Comics::Table)
                     .if_not_exists()
                     .col(ColumnDef::new(Comics::Id).uuid().not_null().primary_key())
-                    .col(ColumnDef::new(Comics::Title).string().not_null())
+                    .col(
+                        ColumnDef::new(Comics::Title)
+                            .string()
+                            .unique_key()
+                            .not_null(),
+                    )
                     .col(ColumnDef::new(Comics::Description).string().not_null())
                     .col(ColumnDef::new(Comics::CreatedAt).date_time().not_null())
                     .col(ColumnDef::new(Comics::UpdatedAt).date_time().not_null())

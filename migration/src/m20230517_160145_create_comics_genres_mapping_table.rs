@@ -1,7 +1,8 @@
 use sea_orm_migration::prelude::*;
 
 use crate::{
-    m20230419_074453_create_comics_table::Comics, m20230517_155027_create_comic_categories_table::ComicCategories,
+    m20230419_074453_create_comics_table::Comics,
+    m20230517_155027_create_comic_genres_table::ComicGenres,
 };
 
 #[derive(DeriveMigrationName)]
@@ -13,34 +14,34 @@ impl MigrationTrait for Migration {
         manager
             .create_table(
                 Table::create()
-                    .table(ComicsCategoriesMapping::Table)
+                    .table(ComicsGenresMapping::Table)
                     .if_not_exists()
                     .primary_key(
                         Index::create()
-                            .col(ComicsCategoriesMapping::ComicId)
-                            .col(ComicsCategoriesMapping::CategoryId),
+                            .col(ComicsGenresMapping::ComicId)
+                            .col(ComicsGenresMapping::GenreId),
                     )
                     .col(
-                        ColumnDef::new(ComicsCategoriesMapping::ComicId)
+                        ColumnDef::new(ComicsGenresMapping::ComicId)
                             .uuid()
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(ComicsCategoriesMapping::CategoryId)
-                            .uuid()
+                        ColumnDef::new(ComicsGenresMapping::GenreId)
+                            .integer()
                             .not_null(),
                     )
                     .foreign_key(
                         ForeignKey::create()
-                            .from_col(ComicsCategoriesMapping::ComicId)
+                            .from_col(ComicsGenresMapping::ComicId)
                             .to(Comics::Table, Comics::Id)
                             .on_delete(ForeignKeyAction::Cascade)
                             .on_update(ForeignKeyAction::Cascade),
                     )
                     .foreign_key(
                         ForeignKey::create()
-                            .from_col(ComicsCategoriesMapping::CategoryId)
-                            .to(ComicCategories::Table, ComicCategories::Id)
+                            .from_col(ComicsGenresMapping::GenreId)
+                            .to(ComicGenres::Table, ComicGenres::Id)
                             .on_delete(ForeignKeyAction::Cascade)
                             .on_update(ForeignKeyAction::Cascade),
                     )
@@ -51,19 +52,15 @@ impl MigrationTrait for Migration {
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         manager
-            .drop_table(
-                Table::drop()
-                    .table(ComicsCategoriesMapping::Table)
-                    .to_owned(),
-            )
+            .drop_table(Table::drop().table(ComicsGenresMapping::Table).to_owned())
             .await
     }
 }
 
 /// Learn more at https://docs.rs/sea-query#iden
 #[derive(Iden)]
-enum ComicsCategoriesMapping {
+enum ComicsGenresMapping {
     Table,
     ComicId,
-    CategoryId,
+    GenreId,
 }
