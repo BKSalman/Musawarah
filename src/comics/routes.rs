@@ -1,12 +1,13 @@
 use axum::{
     extract::{Path, Query, State},
-    Json,
+    routing::{get, post},
+    Json, Router,
 };
 use chrono::Utc;
 use itertools::multizip;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, IntoActiveModel, LoaderTrait,
-    QueryFilter, QuerySelect, Set,
+    ModelTrait, QueryFilter, QuerySelect, RelationTrait, Set, TransactionTrait,
 };
 use serde_json::json;
 use uuid::Uuid;
@@ -14,15 +15,26 @@ use uuid::Uuid;
 use crate::{
     auth::AuthExtractor,
     chapters::models::ChapterResponseBrief,
-    entity::{self, chapters::Entity as Chapter, comics::Entity as Comic, users::Entity as User},
+    comic_genres::{models::ComicGenre, ComicGenresError},
+    entity::{
+        self, chapters::Entity as Chapter, comic_genres::Entity as Genre, comics::Entity as Comic,
+        comics_genres_mapping::Entity as GenreMapping, users::Entity as User,
+    },
     users::models::UserResponseBrief,
-    PaginationParams,
+    AppState, PaginationParams,
 };
 
 use super::{
-    models::{ComicResponseBrief, CreateComic, UpdateComic},
-    ComicsError,
+    models::{ComicResponse, CreateComic, UpdateComic},
+    ComicsError, ComicsParams,
 };
+
+pub fn comics_router() -> Router<AppState> {
+    Router::new()
+        .route("/", post(create_comic))
+        .route("/:comic_id", get(get_comic))
+        .route("/", get(get_comics_cursor))
+}
 
 /// Create Comic
 #[utoipa::path(
@@ -43,8 +55,10 @@ pub async fn create_comic(
     auth: AuthExtractor,
     State(db): State<DatabaseConnection>,
     Json(payload): Json<CreateComic>,
-) -> Result<Json<ComicResponseBrief>, ComicsError> {
+) -> Result<Json<ComicResponse>, ComicsError> {
     // save comic to db
+
+    let transaction = db.begin().await?;
 
     let current_date = Utc::now().naive_utc();
 
@@ -57,7 +71,7 @@ pub async fn create_comic(
         updated_at: current_date,
     }
     .into_active_model()
-    .insert(&db)
+    .insert(&transaction)
     .await
     .map_err(|e| {
         if let migration::DbErr::Query(sea_orm::RuntimeErr::SqlxError(sqlx::Error::Database(err))) =
@@ -80,22 +94,59 @@ pub async fn create_comic(
         ComicsError::InternalServerError
     })?;
 
-    let comic = ComicResponseBrief {
+    let mut comic_response = ComicResponse {
         id: comic.id,
         author: auth.current_user,
-        title: comic.title,
-        description: comic.description,
+        title: comic.title.to_string(),
+        description: comic.description.to_string(),
         created_at: comic.created_at.to_string(),
         chapters: vec![],
+        genres: vec![],
     };
 
-    Ok(Json(comic))
-}
+    let Some(genres) = payload.categories else {
+        return Ok(Json(comic_response));
+    };
 
-// #[derive(Deserialize, IntoParams)]
-// pub struct ComicParams {
-//     comic_id: Uuid,
-// }
+    let db_genre_mappings: Vec<entity::comics_genres_mapping::ActiveModel> = genres
+        .iter()
+        .map(|genre| {
+            entity::comics_genres_mapping::Model {
+                genre_id: *genre,
+                comic_id: comic.id,
+            }
+            .into_active_model()
+        })
+        .collect();
+
+    let _res = entity::comics_genres_mapping::Entity::insert_many(db_genre_mappings)
+        .exec(&transaction)
+        .await
+        .map_err(|e| {
+            if let sea_orm::error::DbErr::Exec(sea_orm::error::RuntimeErr::SqlxError(
+                sqlx::Error::Database(error),
+            )) = e
+            {
+                tracing::error!("db error: {}", error.message());
+            }
+            // TODO: handle conflict
+            ComicsError::ComicGenresErrors(ComicGenresError::InvalidGenre)
+        })?;
+
+    transaction.commit().await?;
+
+    let genres = comic.find_related(Genre).all(&db).await?;
+
+    comic_response.genres = genres
+        .into_iter()
+        .map(|genre| ComicGenre {
+            id: genre.id,
+            name: genre.name,
+        })
+        .collect();
+
+    Ok(Json(comic_response))
+}
 
 /// Get comic by id
 #[utoipa::path(
@@ -115,16 +166,17 @@ pub async fn create_comic(
 pub async fn get_comic(
     State(db): State<DatabaseConnection>,
     Path(comic_id): Path<Uuid>,
-) -> Result<Json<ComicResponseBrief>, ComicsError> {
+) -> Result<Json<ComicResponse>, ComicsError> {
     let comic = Comic::find_by_id(comic_id)
         // .find_with_related(entity::chapters::Entity)
         .all(&db)
         .await?;
 
     let chapters = comic.load_many(Chapter, &db).await?;
+    let genres = comic.load_many_to_many(Genre, GenreMapping, &db).await?;
     let user = comic.load_one(User, &db).await?;
 
-    let (comic, chapters, Some(user)) = multizip((comic, chapters, user)).next().ok_or_else(|| {
+    let (comic, genres, chapters, Some(user)) = multizip((comic, genres, chapters, user)).next().ok_or_else(|| {
         tracing::error!("No comic found");
         ComicsError::ComicNotFound
     })? else {
@@ -132,7 +184,7 @@ pub async fn get_comic(
         return Err(ComicsError::InternalServerError);
     };
 
-    let comic = ComicResponseBrief {
+    let comic = ComicResponse {
         id: comic.id,
         author: UserResponseBrief {
             id: user.id,
@@ -149,6 +201,13 @@ pub async fn get_comic(
                 id: chapter.id,
                 number: chapter.number,
                 description: chapter.description,
+            })
+            .collect(),
+        genres: genres
+            .into_iter()
+            .map(|genre| ComicGenre {
+                id: genre.id,
+                name: genre.name,
             })
             .collect(),
     };
@@ -172,47 +231,74 @@ pub async fn get_comic(
 #[axum::debug_handler]
 pub async fn get_comics_cursor(
     State(db): State<DatabaseConnection>,
-    Query(pagination): Query<PaginationParams>,
-) -> Result<Json<Vec<ComicResponseBrief>>, ComicsError> {
-    tracing::debug!("cursor: {:#?}", pagination);
+    Query(params): Query<ComicsParams>,
+) -> Result<Json<Vec<ComicResponse>>, ComicsError> {
+    tracing::debug!("cursor: {:#?}", params);
 
-    let comics = Comic::find()
-        .filter(entity::comics::Column::Id.gt(pagination.min_id))
-        .filter(entity::comics::Column::Id.lt(pagination.max_id))
+    let mut comics_query = Comic::find()
+        .filter(entity::comics::Column::Id.gt(params.min_id))
+        .filter(entity::comics::Column::Id.lt(params.max_id))
+        .join_rev(
+            migration::JoinType::InnerJoin,
+            entity::comics_genres_mapping::Entity::belongs_to(entity::comics::Entity)
+                .from(entity::comics_genres_mapping::Column::ComicId)
+                .to(entity::comics::Column::Id)
+                .into(),
+        )
+        .join(
+            migration::JoinType::InnerJoin,
+            entity::comics_genres_mapping::Relation::ComicGenres.def(),
+        )
         // TODO: determine good limit
-        .limit(Some(10))
-        .all(&db)
-        .await?;
+        .limit(Some(10));
+
+    if let Some(genre_filter) = params.genre {
+        comics_query = comics_query.filter(entity::comic_genres::Column::Id.eq(genre_filter));
+    }
+
+    let comics = comics_query.all(&db).await?;
 
     let chapters = comics.load_many(entity::chapters::Entity, &db).await?;
-    let users = comics.load_one(User, &db).await?;
-
-    let comics: Result<Vec<ComicResponseBrief>, ComicsError> = multizip((users, comics, chapters))
-        .filter(|(user, _comic, _chapters)| user.is_some())
-        .map(|(user, comic, chapters)| {
-            let user = user.ok_or(ComicsError::InternalServerError)?;
-            Ok(ComicResponseBrief {
-                id: comic.id,
-                title: comic.title,
-                description: comic.description,
-                created_at: comic.created_at.to_string(),
-                author: UserResponseBrief {
-                    id: user.id,
-                    displayname: user.displayname,
-                    username: user.username,
-                    email: user.email,
-                },
-                chapters: chapters
-                    .into_iter()
-                    .map(|chapter| ChapterResponseBrief {
-                        id: chapter.id,
-                        number: chapter.number,
-                        description: chapter.description,
-                    })
-                    .collect(),
-            })
-        })
+    let genres = comics.load_many_to_many(Genre, GenreMapping, &db).await?;
+    let users: Vec<entity::users::Model> = comics
+        .load_one(User, &db)
+        .await?
+        .into_iter()
+        .flatten()
         .collect();
+
+    let comics: Result<Vec<ComicResponse>, ComicsError> =
+        multizip((users, comics, genres, chapters))
+            .map(|(user, comic, genres, chapters)| {
+                Ok(ComicResponse {
+                    id: comic.id,
+                    title: comic.title,
+                    description: comic.description,
+                    created_at: comic.created_at.to_string(),
+                    author: UserResponseBrief {
+                        id: user.id,
+                        displayname: user.displayname,
+                        username: user.username,
+                        email: user.email,
+                    },
+                    chapters: chapters
+                        .into_iter()
+                        .map(|chapter| ChapterResponseBrief {
+                            id: chapter.id,
+                            number: chapter.number,
+                            description: chapter.description,
+                        })
+                        .collect(),
+                    genres: genres
+                        .into_iter()
+                        .map(|genre| ComicGenre {
+                            id: genre.id,
+                            name: genre.name,
+                        })
+                        .collect(),
+                })
+            })
+            .collect();
 
     Ok(Json(comics?))
 }

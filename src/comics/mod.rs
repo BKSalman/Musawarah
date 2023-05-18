@@ -1,10 +1,23 @@
 use axum::{http::StatusCode, response::IntoResponse, Json};
+use serde::Deserialize;
+use utoipa::IntoParams;
+use uuid::Uuid;
 // use tracing::debug;
 
-use crate::ErrorHandlingResponse;
+use crate::ErrorResponse;
 
 pub mod models;
 pub mod routes;
+
+#[derive(Debug, Deserialize, IntoParams)]
+pub struct ComicsParams {
+    #[serde(default = "Uuid::nil")]
+    min_id: Uuid,
+    #[serde(default = "Uuid::max")]
+    max_id: Uuid,
+    #[serde(default)]
+    genre: Option<i32>,
+}
 
 #[derive(thiserror::Error, Debug)]
 pub enum ComicsError {
@@ -27,28 +40,28 @@ pub enum ComicsError {
     // Validator(#[from] validator::ValidationErrors),
     #[error("{0}")]
     Conflict(String),
+
+    #[error("{0}")]
+    ComicGenresErrors(#[from] crate::comic_genres::ComicGenresError),
 }
 
 impl IntoResponse for ComicsError {
     fn into_response(self) -> axum::response::Response {
-        tracing::debug!("{}", self.to_string());
+        tracing::error!("{:#?}", self);
 
         let (status, error_message) = match self {
             ComicsError::ComicNotFound => (StatusCode::NOT_FOUND, vec![self.to_string()]),
             ComicsError::BadRequest => (StatusCode::BAD_REQUEST, vec![self.to_string()]),
             ComicsError::ImageTooLarge => (StatusCode::BAD_REQUEST, vec![self.to_string()]),
             ComicsError::Conflict(_) => (StatusCode::CONFLICT, vec![self.to_string()]),
-            ComicsError::SeaORM(_) => {
-                tracing::error!("seaorm error: {:#?}", self);
-                (StatusCode::INTERNAL_SERVER_ERROR, vec![self.to_string()])
-            }
+            ComicsError::SeaORM(_) => (StatusCode::INTERNAL_SERVER_ERROR, vec![self.to_string()]),
             ComicsError::InternalServerError => {
-                tracing::error!("internal server error: {:#?}", self);
                 (StatusCode::INTERNAL_SERVER_ERROR, vec![self.to_string()])
             }
+            ComicsError::ComicGenresErrors(_) => (StatusCode::BAD_REQUEST, vec![self.to_string()]),
         };
 
-        let body = Json(ErrorHandlingResponse {
+        let body = Json(ErrorResponse {
             errors: error_message,
         });
 
