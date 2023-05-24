@@ -19,7 +19,6 @@
             exa
             fd
             bat
-            zoxide
             
             # database
             postgresql
@@ -31,7 +30,7 @@
             (rust-bin.stable.latest.default.override {
               extensions = [ "rust-src" "rust-analyzer" ];
             })
-            sqlx-cli
+            diesel-cli
             # auto reload server on save
             # cargo watch -x run
             cargo-watch
@@ -72,9 +71,6 @@
 
             # export environment variables
             export $(cat .env)
-
-            # run zoxide for directory aliases
-            eval "$(zoxide init bash)"
           '';
         };
 
