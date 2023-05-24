@@ -7,11 +7,13 @@ use axum::{
     routing::get,
     Router,
 };
+use diesel_async::pooled_connection::{deadpool::Pool, AsyncDieselConnectionManager};
+use diesel_migrations_async::{embed_migrations, EmbeddedMigrations};
 use dotenv::dotenv;
 use musawarah::{
     chapters::routes::chapters_router, comic_genres::routes::comic_genres_router,
-    comics::routes::comics_router, s3::helpers::setup_storage, sessions::refresh_session,
-    users::routes::users_router, ApiDoc, AppState, COOKIES_SECRET,
+    comics::routes::comics_router, migrations::run_migrations, s3::helpers::setup_storage,
+    sessions::refresh_session, users::routes::users_router, ApiDoc, AppState, COOKIES_SECRET,
 };
 use rand::Rng;
 use std::{
@@ -28,6 +30,7 @@ use tracing_subscriber::{
 };
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
+pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 
 #[tokio::main]
 async fn main() {
@@ -45,12 +48,17 @@ async fn main() {
 
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL env variable");
 
-    let db = sea_orm::Database::connect(database_url)
-        .await
-        .expect("Database connection");
+    let config = AsyncDieselConnectionManager::<diesel_async::AsyncPgConnection>::new(database_url);
+    let pool = Pool::builder(config).build().expect("db connection pool");
+
+    let mut db = pool.get().await.expect("db connection");
+
+    run_migrations(&mut db).await.expect("Run migrations");
+
+    drop(db);
 
     let app_state = AppState {
-        db,
+        pool,
         storage: setup_storage().expect("storage"),
     };
 
