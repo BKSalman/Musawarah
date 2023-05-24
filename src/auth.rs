@@ -3,13 +3,16 @@ use axum::{
     extract::FromRequestParts, http::StatusCode, response::IntoResponse, Json, RequestPartsExt,
 };
 use chrono::Utc;
-use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+use diesel::{ExpressionMethods, QueryDsl, SelectableHelper};
+use diesel_async::RunQueryDsl;
 use tower_cookies::{Cookie, Cookies};
 use uuid::Uuid;
 
 use crate::{
-    entity, sessions::SESSION_COOKIE_NAME, users::models::UserResponseBrief, AppState,
-    ErrorResponse, COOKIES_SECRET,
+    schema::{sessions, users},
+    sessions::{models::Session, SESSION_COOKIE_NAME},
+    users::models::{User, UserResponseBrief},
+    AppState, ErrorResponse, COOKIES_SECRET,
 };
 
 pub struct AuthExtractor {
@@ -17,10 +20,16 @@ pub struct AuthExtractor {
     pub session_id: Uuid,
 }
 
-#[derive(thiserror::Error, Debug, Clone)]
+#[derive(thiserror::Error, Debug)]
 pub enum AuthError {
     #[error("something went wrong")]
     SomethinWentWrong,
+
+    #[error("something went wrong")]
+    PoolError(#[from] diesel_async::pooled_connection::deadpool::PoolError),
+
+    #[error("something went wrong")]
+    Diesel(#[from] diesel::result::Error),
 
     #[error("invalid session")]
     InvalidSession,
@@ -41,6 +50,18 @@ impl IntoResponse for AuthError {
                     errors: vec![self.to_string()],
                 },
             ),
+            AuthError::Diesel(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                ErrorResponse {
+                    errors: vec![self.to_string()],
+                },
+            ),
+            AuthError::PoolError(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                ErrorResponse {
+                    errors: vec![self.to_string()],
+                },
+            ),
         };
 
         let body = Json(error_message);
@@ -57,6 +78,8 @@ impl FromRequestParts<AppState> for AuthExtractor {
         parts: &mut axum::http::request::Parts,
         state: &AppState,
     ) -> std::result::Result<Self, Self::Rejection> {
+        let mut db = state.pool.get().await?;
+
         let cookies =
             parts
                 .extract::<Cookies>()
@@ -69,13 +92,13 @@ impl FromRequestParts<AppState> for AuthExtractor {
         let key = COOKIES_SECRET.get().expect("cookies secret key");
 
         #[allow(unused_mut)]
-        let mut cookie_to_be_removed = Cookie::build(SESSION_COOKIE_NAME, "")
+        let mut remove_cookie_on_fail = Cookie::build(SESSION_COOKIE_NAME, "")
             .path("/")
             .http_only(true);
 
         #[cfg(not(debug_assertions))]
         {
-            cookie_to_be_removed = cookie_to_be_removed
+            remove_cookie_on_fail = cookie_to_be_removed
                 // TODO: use the actual musawarah domain
                 .domain("salmanforgot.com")
                 .secure(true);
@@ -83,7 +106,7 @@ impl FromRequestParts<AppState> for AuthExtractor {
 
         #[cfg(debug_assertions)]
         {
-            cookie_to_be_removed = cookie_to_be_removed.domain("localhost");
+            remove_cookie_on_fail = remove_cookie_on_fail.domain("localhost");
         }
 
         let session_id = cookies
@@ -91,35 +114,27 @@ impl FromRequestParts<AppState> for AuthExtractor {
             .get(SESSION_COOKIE_NAME)
             .ok_or_else(|| {
                 tracing::error!("auth-extractor: failed to get session_id cookie");
-                cookies.remove(cookie_to_be_removed.clone().finish());
+                cookies.remove(remove_cookie_on_fail.clone().finish());
                 AuthError::InvalidSession
             })?;
 
         let session_id = Uuid::parse_str(session_id.value()).map_err(|e| {
             tracing::error!("auth-extractor: invalid session_id: {e}");
-            // FIXME: this is weird
-            cookies.remove(cookie_to_be_removed.clone().finish());
+            // FIXME: why do I need to clone
+            cookies.remove(remove_cookie_on_fail.clone().finish());
             AuthError::InvalidSession
         })?;
 
-        let (session, Some(user)) = entity::sessions::Entity::find_by_id(session_id)
-            .filter(entity::sessions::Column::ExpiresAt.gt(Utc::now().naive_utc()))
-            .find_also_related(entity::users::Entity)
-            .one(&state.db)
-            .await
-            .map_err(|e| {
-                tracing::error!("auth-extractor: failed to fetch session: {e}");
-                cookies.remove(cookie_to_be_removed.clone().finish());
-                AuthError::InvalidSession
-            })?
-            .ok_or_else(|| {
-                tracing::error!("auth-extractor: failed to fetch active (not expired) session");
-                cookies.remove(cookie_to_be_removed.finish());
-                AuthError::InvalidSession
-            })? else {
-                tracing::error!("auth-extractor: failed to fetch user");
-                return Err(AuthError::SomethinWentWrong);
-            };
+        let Ok((user, session)) = sessions::table
+            .inner_join(users::table)
+            .filter(sessions::id.eq(session_id))
+            .filter(sessions::expires_at.gt(Utc::now()))
+            .select((User::as_select(), Session::as_select()))
+            .get_result::<(User, Session)>(&mut db)
+            .await else {
+            cookies.remove(remove_cookie_on_fail.clone().finish());
+            return Err(AuthError::InvalidSession);
+        };
 
         Ok(AuthExtractor {
             current_user: UserResponseBrief {
