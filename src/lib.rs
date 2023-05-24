@@ -1,9 +1,5 @@
 use axum::{extract::FromRef, response::IntoResponse};
-use deadpool::managed::Manager;
-use diesel_async::{
-    pooled_connection::{deadpool::Pool, AsyncDieselConnectionManager},
-    AsyncPgConnection,
-};
+use diesel_async::{pooled_connection::deadpool::Pool, AsyncPgConnection};
 use once_cell::sync::OnceCell;
 use s3::interface::Storage;
 use serde::{Deserialize, Serialize};
