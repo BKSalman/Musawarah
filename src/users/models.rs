@@ -1,10 +1,80 @@
+use std::io::Write;
+
+use chrono::{DateTime, NaiveDateTime};
+use diesel::{
+    deserialize::{self, FromSql},
+    pg::{Pg, PgValue},
+    prelude::*,
+    serialize::{self, IsNull, Output, ToSql},
+    AsExpression, FromSqlRow,
+};
 use garde::Validate;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::common::models::ImageResponse;
+use crate::{
+    common::models::ImageResponse,
+    schema::{profile_images, users},
+};
+#[derive(Deserialize, Serialize, Debug, AsExpression, FromSqlRow, TS)]
+#[diesel(sql_type = crate::schema::sql_types::Userrole)]
+pub enum UserRole {
+    Admin,
+    Staff,
+    User,
+}
+
+impl ToSql<crate::schema::sql_types::Userrole, Pg> for UserRole {
+    fn to_sql<'b>(&'b self, out: &mut Output<'b, '_, Pg>) -> serialize::Result {
+        match *self {
+            UserRole::Admin => out.write_all(b"admin"),
+            UserRole::Staff => out.write_all(b"staff"),
+            UserRole::User => out.write_all(b"user"),
+        }?;
+        Ok(IsNull::No)
+    }
+}
+
+impl FromSql<crate::schema::sql_types::Userrole, Pg> for UserRole {
+    fn from_sql(bytes: PgValue) -> deserialize::Result<Self> {
+        match bytes.as_bytes() {
+            b"admin" => Ok(UserRole::Admin),
+            b"staff" => Ok(UserRole::Staff),
+            b"user" => Ok(UserRole::User),
+            _ => Err("Unrecognized enum variant".into()),
+        }
+    }
+}
+
+#[derive(Insertable, Queryable, Selectable, Identifiable, Debug)]
+#[diesel(table_name = users)]
+pub struct User {
+    pub id: Uuid,
+    pub first_name: Option<String>,
+    pub last_name: Option<String>,
+    pub username: String,
+    pub displayname: String,
+    pub email: String,
+    pub phone_number: Option<String>,
+    pub password: String,
+    pub role: UserRole,
+    pub created_at: NaiveDateTime,
+    pub updated_at: Option<NaiveDateTime>,
+    pub last_login: Option<NaiveDateTime>,
+}
+
+#[derive(Insertable, Queryable, Identifiable, Associations, Selectable, Debug)]
+#[diesel(belongs_to(User))]
+#[diesel(table_name = profile_images)]
+pub struct ProfileImage {
+    pub id: Uuid,
+    pub path: String,
+    pub content_type: String,
+    pub user_id: Uuid,
+    pub updated_at: Option<DateTime<chrono::Utc>>,
+}
 
 #[derive(Validate, Deserialize, ToSchema, TS)]
 pub struct CreateUser {
@@ -29,7 +99,7 @@ pub struct UserLogin {
     pub password: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, ToSchema, TS)]
+#[derive(Queryable, Debug, Serialize, Deserialize, ToSchema, TS)]
 #[ts(export)]
 pub struct UserResponse {
     pub id: Uuid,

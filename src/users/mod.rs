@@ -26,7 +26,10 @@ pub enum UsersError {
     AlreadyLoggedIn,
 
     #[error("internal server error")]
-    SeaORM(#[from] sea_orm::error::DbErr),
+    Diesel(#[from] diesel::result::Error),
+
+    #[error("internal server error")]
+    PoolError(#[from] diesel_async::pooled_connection::deadpool::PoolError),
 
     #[error("internal server error")]
     Argon2(#[from] argon2::password_hash::Error),
@@ -73,7 +76,7 @@ impl IntoResponse for UsersError {
                     errors: vec![self.to_string()],
                 },
             ),
-            UsersError::SeaORM(_) => (
+            UsersError::Diesel(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 ErrorResponse {
                     errors: vec![self.to_string()],
@@ -109,6 +112,12 @@ impl IntoResponse for UsersError {
 
                 (StatusCode::BAD_REQUEST, ErrorResponse { errors })
             }
+            UsersError::PoolError(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                ErrorResponse {
+                    errors: vec![self.to_string()],
+                },
+            ),
         };
 
         let body = Json(error_message);

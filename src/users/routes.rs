@@ -8,24 +8,36 @@ use axum::{
     Json, Router,
 };
 use chrono::{Duration, Utc};
+use diesel::prelude::*;
+use diesel::GroupedBy;
+use diesel_async::{
+    pooled_connection::deadpool::Pool, scoped_futures::ScopedFutureExt, AsyncConnection,
+    AsyncPgConnection, RunQueryDsl,
+};
 use garde::Validate;
 use itertools::multizip;
-use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait, IntoActiveModel,
-    LoaderTrait, ModelTrait, QueryFilter, QuerySelect,
-};
 use time::OffsetDateTime;
 use tower_cookies::{cookie::Cookie, Cookies};
 use uuid::Uuid;
 
 use crate::{
-    auth::AuthExtractor, chapters::models::ChapterResponseBrief, comic_genres::models::ComicGenre,
-    comics::models::ComicResponse, common::models::ImageResponse, entity,
-    sessions::SESSION_COOKIE_NAME, AppState, PaginationParams, COOKIES_SECRET,
+    auth::AuthExtractor,
+    chapters::models::{Chapter, ChapterResponseBrief},
+    comic_genres::models::{ComicGenre, Genre, GenreMapping},
+    comics::models::{Comic, ComicResponse},
+    common::models::ImageResponse,
+    schema::comics,
+    schema::{comic_genres, profile_images, sessions, users},
+    sessions::{
+        models::{CreateSession, Session},
+        SESSION_COOKIE_NAME,
+    },
+    users::models::User,
+    AppState, PaginationParams, COOKIES_SECRET,
 };
 
 use super::{
-    models::{CreateUser, UserLogin, UserResponse, UserResponseBrief},
+    models::{CreateUser, ProfileImage, UserLogin, UserResponse, UserResponseBrief, UserRole},
     UsersError,
 };
 
@@ -63,6 +75,8 @@ pub async fn create_user(
         return Err(UsersError::BadRequest);
     }
 
+    let mut db = state.pool.get().await?;
+
     let salt = SaltString::generate(rand::thread_rng());
 
     // argon2 is a good algorithm (not a security expert :))
@@ -72,57 +86,77 @@ pub async fn create_user(
         .hash_password(payload.password.as_bytes(), &salt)?
         .to_string();
 
-    let user = entity::users::Model {
-        id: Uuid::now_v7(),
-        username: payload.username.to_lowercase(),
-        // TODO: why do I need to clone this?
-        displayname: payload.username.clone(),
-        email: payload.email.clone(),
-        password: hashed_password,
-        created_at: Utc::now().naive_utc(),
-        last_login: None,
-        // TODO: check this
-        first_name: None,
-        last_name: None,
-        phone_number: None,
-    }
-    .into_active_model()
-    .insert(&state.db)
-    .await
-    .map_err(|err| {
-        // tracing::error!("error {:#?}", err);
-        if let migration::DbErr::Query(sea_orm::RuntimeErr::SqlxError(sqlx::Error::Database(
-            error,
-        ))) = err
-        {
-            return match error.constraint() {
-                Some("users_username_key") => {
-                    tracing::error!("{}", error);
-                    UsersError::Conflict(String::from("username already taken"))
-                }
-                Some("users_email_key") => {
-                    tracing::error!("{}", error);
-                    UsersError::Conflict(String::from("email already taken"))
-                }
-                _ => {
-                    tracing::error!("sqlx error: {}", error);
-                    UsersError::InternalServerError
-                }
-            };
-        }
-        tracing::error!("Db error: {}", err);
-        UsersError::InternalServerError
-    })?;
+    let (user, profile_image) = db
+        .transaction::<_, UsersError, _>(|transaction| {
+            async move {
+                let user = User {
+                    id: Uuid::now_v7(),
+                    first_name: None,
+                    // TODO: why do I need to clone this?
+                    last_name: None,
+                    username: payload.username.to_lowercase(),
+                    displayname: payload.username.clone(),
+                    email: payload.email.clone(),
+                    phone_number: None,
+                    password: hashed_password,
+                    role: UserRole::User,
+                    created_at: Utc::now().naive_utc(),
+                    updated_at: None,
+                    last_login: None,
+                };
+                // .into_active_model()
+                // .insert(&state.db)
+                // .await
+                // .map_err(|err| {
+                //     // tracing::error!("error {:#?}", err);
+                //     if let migration::DbErr::Query(sea_orm::RuntimeErr::SqlxError(sqlx::Error::Database(
+                //         error,
+                //     ))) = err
+                //     {
+                //         return match error.constraint() {
+                //             Some("users_username_key") => {
+                //                 tracing::error!("{}", error);
+                //                 UsersError::Conflict(String::from("username already taken"))
+                //             }
+                //             Some("users_email_key") => {
+                //                 tracing::error!("{}", error);
+                //                 UsersError::Conflict(String::from("email already taken"))
+                //             }
+                //             _ => {
+                //                 tracing::error!("sqlx error: {}", error);
+                //                 UsersError::InternalServerError
+                //             }
+                //         };
+                //     }
+                //     tracing::error!("Db error: {}", err);
+                //     UsersError::InternalServerError
+                // })?;
 
-    let profile_image = entity::profile_images::Model {
-        id: Uuid::now_v7(),
-        user_id: user.id,
-        path: String::from("ppL.webp"),
-        content_type: String::from("image/webp"),
-    }
-    .into_active_model()
-    .insert(&state.db)
-    .await?;
+                let user = diesel::insert_into(users::table)
+                    .values(&user)
+                    .returning(User::as_returning())
+                    .get_result(transaction)
+                    .await?;
+
+                let profile_image = ProfileImage {
+                    id: Uuid::now_v7(),
+                    user_id: user.id,
+                    path: String::from("ppL.webp"),
+                    content_type: String::from("image/webp"),
+                    updated_at: None,
+                };
+
+                let profile_image = diesel::insert_into(profile_images::table)
+                    .values(&profile_image)
+                    .returning(ProfileImage::as_returning())
+                    .get_result(transaction)
+                    .await?;
+
+                return Ok((user, profile_image));
+            }
+            .scope_boxed()
+        })
+        .await?;
 
     Ok(Json(UserResponse {
         id: user.id,
@@ -154,10 +188,14 @@ pub async fn create_user(
 )]
 #[axum::debug_handler(state = AppState)]
 pub async fn login(
-    State(db): State<DatabaseConnection>,
+    State(pool): State<Pool<AsyncPgConnection>>,
     cookies: Cookies,
     Json(payload): Json<UserLogin>,
 ) -> Result<(), UsersError> {
+    payload.validate(&())?;
+
+    let mut db = pool.get().await?;
+
     let key = COOKIES_SECRET.get().expect("cookies secret key");
 
     if let Some(session_id) = cookies.private(key).get(SESSION_COOKIE_NAME) {
@@ -165,17 +203,20 @@ pub async fn login(
         return Err(UsersError::AlreadyLoggedIn);
     }
 
-    payload.validate(&())?;
-
     // argon2 is a good algorithm (not a security expert :))
     let argon2 = Argon2::default();
 
-    let Some(user) = entity::users::Entity::find()
-        .filter(entity::users::Column::Email.eq(&payload.email))
-        .one(&db)
-        .await? else {
-        return Err(UsersError::InvalidCredentials);
-    };
+    let user = users::table
+        .filter(users::email.eq(&payload.email))
+        .select(User::as_select())
+        .first(&mut db)
+        .await
+        .map_err(|e| {
+            if let diesel::result::Error::NotFound = e {
+                return UsersError::InvalidCredentials;
+            }
+            return UsersError::Diesel(e);
+        })?;
 
     let parsed_password = PasswordHash::new(&user.password)?;
 
@@ -186,23 +227,26 @@ pub async fn login(
         return Err(UsersError::InvalidCredentials);
     }
 
-    let now_db = Utc::now();
-    let now = OffsetDateTime::now_utc();
+    let now = Utc::now();
+    let time_now = OffsetDateTime::now_utc();
 
-    let session = entity::sessions::Model {
+    let new_session = CreateSession {
         id: Uuid::now_v7(),
         user_id: user.id,
-        created_at: now_db.naive_utc(),
-        expires_at: (now_db + Duration::days(2)).naive_utc(),
-    }
-    .into_active_model()
-    .insert(&db)
-    .await?;
+        created_at: now,
+        expires_at: now + Duration::days(2),
+    };
+
+    let session = diesel::insert_into(sessions::table)
+        .values(&new_session)
+        .returning(Session::as_returning())
+        .get_result::<Session>(&mut db)
+        .await?;
 
     #[allow(unused_mut)]
     let mut cookie = Cookie::build(SESSION_COOKIE_NAME, session.id.to_string())
         .path("/")
-        .expires(now + time::Duration::days(2))
+        .expires(time_now + time::Duration::days(2))
         .http_only(true);
 
     #[cfg(not(debug_assertions))]
@@ -235,14 +279,12 @@ pub async fn login(
 #[axum::debug_handler(state = AppState)]
 pub async fn logout(
     cookies: Cookies,
-    State(db): State<DatabaseConnection>,
+    State(pool): State<Pool<AsyncPgConnection>>,
     auth: AuthExtractor,
 ) -> Result<(), UsersError> {
-    let session = entity::sessions::ActiveModel {
-        id: ActiveValue::Set(auth.session_id),
-        ..Default::default()
-    };
-    session.delete(&db).await?;
+    let mut db = pool.get().await?;
+
+    diesel::delete(sessions::table.filter(sessions::id.eq(auth.session_id))).execute(&mut db);
 
     let mut cookie = Cookie::build(SESSION_COOKIE_NAME, "")
         .path("/")
@@ -285,37 +327,49 @@ pub async fn logout(
 )]
 #[axum::debug_handler]
 pub async fn get_user_comics(
-    State(db): State<DatabaseConnection>,
+    State(pool): State<Pool<AsyncPgConnection>>,
     Path(username): Path<String>,
     Query(pagination): Query<PaginationParams>,
 ) -> Result<Json<Vec<ComicResponse>>, UsersError> {
     tracing::debug!("get {}'s comics", username);
 
-    let Some(user) = entity::users::Entity::find()
-        .filter(entity::users::Column::Username.eq(username))
-        .one(&db)
-        .await? else {
-        return Err(UsersError::UserNotFound);
-    };
+    let mut db = pool.get().await?;
 
-    let comics = user
-        .find_related(entity::comics::Entity)
-        // .find_with_related(entity::chapters::Entity)
-        .filter(entity::comics::Column::Id.gt(pagination.min_id))
-        .filter(entity::comics::Column::Id.lt(pagination.max_id))
-        // TODO: determine a good limit
-        .limit(Some(10))
-        .all(&db)
+    let user = users::table
+        .filter(users::username.eq(username))
+        .select(User::as_select())
+        .first(&mut db)
+        .await
+        .map_err(|e| {
+            if let diesel::result::Error::NotFound = e {
+                return UsersError::UserNotFound;
+            }
+            e.into()
+        })?;
+
+    // TODO: this can by inner_join'ed
+    let comics: Vec<Comic> = Comic::belonging_to(&user)
+        .filter(comics::id.gt(pagination.min_id))
+        .filter(comics::id.lt(pagination.max_id))
+        .limit(10)
+        .select(Comic::as_select())
+        .load::<Comic>(&mut db)
         .await?;
 
-    let chapters = comics.load_many(entity::chapters::Entity, &db).await?;
-    let genres = comics
-        .load_many_to_many(
-            entity::comic_genres::Entity,
-            entity::comics_genres_mapping::Entity,
-            &db,
-        )
+    let chapters: Vec<Chapter> = Chapter::belonging_to(&comics)
+        .select(Chapter::as_select())
+        .load::<Chapter>(&mut db)
         .await?;
+
+    let genres: Vec<(GenreMapping, Genre)> = GenreMapping::belonging_to(&comics)
+        .inner_join(comic_genres::table)
+        .select((GenreMapping::as_select(), Genre::as_select()))
+        .load::<(GenreMapping, Genre)>(&mut db)
+        .await?;
+
+    let chapters = chapters.grouped_by(&comics);
+
+    let genres = genres.grouped_by(&comics);
 
     let comics: Result<Vec<ComicResponse>, UsersError> = multizip((comics, genres, chapters))
         .map(move |(comic, genres, chapters)| {
@@ -323,9 +377,9 @@ pub async fn get_user_comics(
                 id: comic.id,
                 author: UserResponseBrief {
                     id: user.id,
-                    displayname: user.clone().displayname,
-                    username: user.clone().username,
-                    email: user.clone().email,
+                    displayname: user.displayname.clone(),
+                    username: user.username.clone(),
+                    email: user.email.clone(),
                 },
                 title: comic.title,
                 description: comic.description,
@@ -340,7 +394,7 @@ pub async fn get_user_comics(
                     .collect(),
                 genres: genres
                     .into_iter()
-                    .map(|genre| ComicGenre {
+                    .map(|(_genre_mapping, genre)| ComicGenre {
                         id: genre.id,
                         name: genre.name,
                     })
@@ -368,18 +422,21 @@ pub async fn get_user_comics(
 )]
 #[axum::debug_handler]
 pub async fn get_user(
-    State(db): State<DatabaseConnection>,
+    State(pool): State<Pool<AsyncPgConnection>>,
     Path(user_id): Path<Uuid>,
 ) -> Result<Json<UserResponse>, UsersError> {
-    let Some((user, Some(profile_image))) = entity::users::Entity::find()
-        .filter(entity::users::Column::Id.eq(user_id))
-        .find_also_related(entity::profile_images::Entity)
-        .one(&db)
-        // TODO: handle errors
-        .await? else {
-        tracing::debug!("User not found");
-        return Err(UsersError::UserNotFound);
-    };
+    let mut db = pool.get().await?;
+
+    let user = users::table
+        .filter(users::id.eq(user_id))
+        .select(User::as_select())
+        .first(&mut db)
+        .await?;
+
+    let profile_image = ProfileImage::belonging_to(&user)
+        .select(ProfileImage::as_select())
+        .first(&mut db)
+        .await?;
 
     let user = UserResponse {
         id: user.id,
