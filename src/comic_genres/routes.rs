@@ -1,10 +1,10 @@
+use crate::{comic_genres::models::ComicGenre, schema::comic_genres, AppState};
+use futures_util::TryStreamExt;
+
+use super::{models::Genre, ComicGenresError};
 use axum::{extract::State, routing::get, Json, Router};
-use futures::TryStreamExt;
-use sea_orm::{DatabaseConnection, EntityTrait};
-
-use crate::{entity::comic_genres::Entity as Genre, AppState};
-
-use super::{models::ComicGenre, ComicGenresError};
+use diesel::{QueryDsl, SelectableHelper};
+use diesel_async::{pooled_connection::deadpool::Pool, AsyncPgConnection, RunQueryDsl};
 
 pub fn comic_genres_router() -> Router<AppState> {
     Router::new().route("/", get(get_comic_genres))
@@ -21,27 +21,22 @@ pub fn comic_genres_router() -> Router<AppState> {
 )]
 #[axum::debug_handler]
 pub async fn get_comic_genres(
-    State(db): State<DatabaseConnection>,
+    State(pool): State<Pool<AsyncPgConnection>>,
 ) -> Result<Json<Vec<ComicGenre>>, ComicGenresError> {
-    let genres = Genre::find()
-        .stream(&db)
-        .await
-        .map_err(|e| {
-            tracing::error!("db error: {}", e);
-            ComicGenresError::PlaceHolder
-        })?
-        .and_then(|genre| async move {
-            Ok(ComicGenre {
-                id: genre.id,
-                name: genre.name,
-            })
+    let mut db = pool.get().await?;
+
+    let genres = comic_genres::table
+        .select(Genre::as_select())
+        .load_stream::<Genre>(&mut db)
+        .await?
+        .try_fold(Vec::new(), |mut acc, item| {
+            acc.push(ComicGenre {
+                id: item.id,
+                name: item.name,
+            });
+            futures::future::ready(Ok(acc))
         })
-        .try_collect::<Vec<ComicGenre>>()
-        .await
-        .map_err(|e| {
-            tracing::error!("stream error: {}", e);
-            ComicGenresError::PlaceHolder
-        })?;
+        .await?;
 
     Ok(Json(genres))
 }
