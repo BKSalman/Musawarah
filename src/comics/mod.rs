@@ -1,10 +1,9 @@
 use axum::{http::StatusCode, response::IntoResponse, Json};
+use diesel::result::{DatabaseErrorKind, Error::DatabaseError};
+use diesel_async::pooled_connection::deadpool::PoolError;
 use serde::Deserialize;
 use utoipa::IntoParams;
 use uuid::Uuid;
-// use tracing::debug;
-
-use crate::ErrorResponse;
 
 pub mod models;
 pub mod routes;
@@ -34,13 +33,13 @@ pub enum ComicsError {
     ImageTooLarge,
 
     #[error("internal server error")]
-    SeaORM(#[from] sea_orm::DbErr),
+    Diesel(#[from] diesel::result::Error),
+
+    #[error("internal server error")]
+    PoolError(#[from] PoolError),
 
     // #[error("validation error: {0}")]
     // Validator(#[from] validator::ValidationErrors),
-    #[error("{0}")]
-    Conflict(String),
-
     #[error("{0}")]
     ComicGenresErrors(#[from] crate::comic_genres::ComicGenresError),
 }
@@ -49,22 +48,29 @@ impl IntoResponse for ComicsError {
     fn into_response(self) -> axum::response::Response {
         tracing::error!("{:#?}", self);
 
-        let (status, error_message) = match self {
-            ComicsError::ComicNotFound => (StatusCode::NOT_FOUND, vec![self.to_string()]),
-            ComicsError::BadRequest => (StatusCode::BAD_REQUEST, vec![self.to_string()]),
-            ComicsError::ImageTooLarge => (StatusCode::BAD_REQUEST, vec![self.to_string()]),
-            ComicsError::Conflict(_) => (StatusCode::CONFLICT, vec![self.to_string()]),
-            ComicsError::SeaORM(_) => (StatusCode::INTERNAL_SERVER_ERROR, vec![self.to_string()]),
-            ComicsError::InternalServerError => {
-                (StatusCode::INTERNAL_SERVER_ERROR, vec![self.to_string()])
+        match self {
+            ComicsError::ComicNotFound => StatusCode::NOT_FOUND.into_response(),
+            ComicsError::BadRequest => StatusCode::BAD_REQUEST.into_response(),
+            ComicsError::ImageTooLarge => StatusCode::BAD_REQUEST.into_response(),
+            ComicsError::Diesel(diesel_error) => {
+                if let DatabaseError(DatabaseErrorKind::UniqueViolation, message) = diesel_error {
+                    let constraint_name = message.constraint_name().unwrap();
+                    if constraint_name == "comics_title_key" {
+                        return (
+                            StatusCode::CONFLICT,
+                            Json("comic with same title already exists"),
+                        )
+                            .into_response();
+                    } else if constraint_name == "comic_genres_mapping_pkey" {
+                        return (StatusCode::CONFLICT, Json("duplicate comic genre"))
+                            .into_response();
+                    }
+                }
+                StatusCode::INTERNAL_SERVER_ERROR.into_response()
             }
-            ComicsError::ComicGenresErrors(_) => (StatusCode::BAD_REQUEST, vec![self.to_string()]),
-        };
-
-        let body = Json(ErrorResponse {
-            errors: error_message,
-        });
-
-        (status, body).into_response()
+            ComicsError::PoolError(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+            ComicsError::InternalServerError => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+            ComicsError::ComicGenresErrors(_) => StatusCode::BAD_REQUEST.into_response(),
+        }
     }
 }
