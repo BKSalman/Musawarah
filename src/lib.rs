@@ -1,7 +1,7 @@
 use axum::{extract::FromRef, response::IntoResponse};
+use diesel_async::{pooled_connection::deadpool::Pool, AsyncPgConnection};
 use once_cell::sync::OnceCell;
 use s3::interface::Storage;
-use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
 use tower_cookies::cookie::Key;
 use utoipa::{
@@ -15,14 +15,15 @@ pub mod chapters;
 pub mod comic_genres;
 pub mod comics;
 pub mod common;
-pub mod entity;
+pub mod migrations;
 pub mod s3;
+pub mod schema;
 pub mod sessions;
 pub mod users;
 
 #[derive(Clone, FromRef)]
 pub struct AppState {
-    pub db: DatabaseConnection,
+    pub pool: Pool<AsyncPgConnection>,
     pub storage: Storage,
 }
 
@@ -87,9 +88,10 @@ pub struct PaginationParams {
     max_id: Uuid,
 }
 
-#[derive(Serialize, Deserialize, ToSchema, Debug)]
+#[derive(Serialize, Deserialize, ToSchema, Debug, Default)]
 pub struct ErrorResponse {
-    pub errors: Vec<String>,
+    pub error: String,
+    pub details: Option<Vec<String>>,
 }
 
 impl IntoResponse for ErrorResponse {

@@ -6,11 +6,14 @@ use axum::{
     Json, Router,
 };
 use chrono::Utc;
-use futures::{FutureExt, TryStreamExt};
-use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, IntoActiveModel, QueryFilter,
-    QuerySelect, Set, TransactionTrait,
+use diesel::BelongingToDsl;
+use diesel::GroupedBy;
+use diesel::{ExpressionMethods, QueryDsl, SelectableHelper};
+use diesel_async::{
+    pooled_connection::deadpool::Pool, scoped_futures::ScopedFutureExt, AsyncConnection,
+    AsyncPgConnection, RunQueryDsl,
 };
+use futures::TryStreamExt;
 use serde_json::json;
 use tempfile::tempfile;
 use tokio::{
@@ -22,16 +25,17 @@ use tower_http::limit::RequestBodyLimitLayer;
 
 use crate::{
     auth::AuthExtractor,
+    chapters::models::ChapterPage,
     common::models::ImageResponse,
-    entity::{self, chapter_pages::Entity as ChapterPage, chapters::Entity as Chapter},
     s3::{interface::Storage, Upload},
+    schema::{chapter_pages, comic_chapters},
     AppState, PaginationParams,
 };
 
 use super::{
     models::{
-        ChapterPageData, ChapterPageResponse, ChapterResponse, ChapterResponseBrief, CreateChapter,
-        UpdateChapter,
+        Chapter, ChapterPageData, ChapterPageResponse, ChapterResponse, ChapterResponseBrief,
+        CreateChapter, UpdateChapter,
     },
     utils::box_error,
     ChaptersError,
@@ -66,51 +70,62 @@ pub fn chapters_router() -> Router<AppState> {
 )]
 pub async fn create_chapter(
     auth: AuthExtractor,
-    State(db): State<DatabaseConnection>,
+    State(pool): State<Pool<AsyncPgConnection>>,
     Json(payload): Json<CreateChapter>,
 ) -> Result<Json<ChapterResponseBrief>, ChaptersError> {
-    let current_date = Utc::now().naive_utc();
-    let chapter = entity::chapters::Model {
+    let mut db = pool.get().await?;
+
+    let chapter = Chapter {
         id: Uuid::now_v7(),
-        author_id: auth.current_user.id,
+        user_id: auth.current_user.id,
         comic_id: payload.comic_id,
         number: payload.number,
         title: payload.title,
         description: payload.description,
-        created_at: current_date,
-        updated_at: current_date,
-    }
-    .into_active_model()
-    .insert(&db)
-    .await
-    .map_err(|e| {
-        if let migration::DbErr::Query(sea_orm::RuntimeErr::SqlxError(sqlx::Error::Database(err))) =
-            e
-        {
-            match err.constraint() {
-                Some("chapters_title_key") => {
-                    tracing::error!("{}", err);
-                    return ChaptersError::Conflict(String::from(
-                        "chapter with same title already exists",
-                    ));
-                }
-                Some("chapters_comic_id_number_key") => {
-                    tracing::error!("{}", err);
-                    return ChaptersError::Conflict(String::from(
-                        "chapter with same number already exists",
-                    ));
-                }
-                _ => {
-                    tracing::error!("{}", err);
-                    return ChaptersError::InternalServerError;
-                }
-            }
-        }
-        tracing::error!("DB error: {}", e);
-        ChaptersError::InternalServerError
-    })?;
+        created_at: Utc::now(),
+        updated_at: None,
+    };
+    // .into_active_model()
+    // .insert(&db)
+    // .await
+    // .map_err(|e| {
+    //     if let migration::DbErr::Query(sea_orm::RuntimeErr::SqlxError(sqlx::Error::Database(err))) =
+    //         e
+    //     {
+    //         match err.constraint() {
+    //             Some("chapters_title_key") => {
+    //                 tracing::error!("{}", err);
+    //                 return ChaptersError::Conflict(String::from(
+    //                     "chapter with same title already exists",
+    //                 ));
+    //             }
+    //             Some("chapters_comic_id_number_key") => {
+    //                 tracing::error!("{}", err);
+    //                 return ChaptersError::Conflict(String::from(
+    //                     "chapter with same number already exists",
+    //                 ));
+    //             }
+    //             _ => {
+    //                 tracing::error!("{}", err);
+    //                 return ChaptersError::InternalServerError;
+    //             }
+    //         }
+    //     }
+    //     tracing::error!("DB error: {}", e);
+    //     ChaptersError::InternalServerError
+    // })?;
 
-    Ok(Json(chapter.into()))
+    let res = diesel::insert_into(comic_chapters::table)
+        .values(&chapter)
+        .returning(Chapter::as_returning())
+        .get_result::<Chapter>(&mut db)
+        .await?;
+
+    Ok(Json(ChapterResponseBrief {
+        id: res.id,
+        number: res.number,
+        description: res.description,
+    }))
 }
 
 /// Create a chapter page
@@ -129,9 +144,11 @@ pub async fn create_chapter(
 pub async fn create_chapter_page(
     auth: AuthExtractor,
     State(storage): State<Storage>,
-    State(db): State<DatabaseConnection>,
+    State(pool): State<Pool<AsyncPgConnection>>,
     mut fields: Multipart,
 ) -> Result<Json<ChapterPageResponse>, ChaptersError> {
+    let mut db = pool.get().await?;
+
     let mut chapter_page = ChapterPageData::builder();
     let mut upload = Upload::builder();
     let mut content_length: i64 = 0;
@@ -250,24 +267,24 @@ pub async fn create_chapter_page(
     let upload = upload.build().map_err(|_| ChaptersError::BadRequest)?;
 
     let new_chapter_page = db
-        .transaction(|transaction| {
+        .transaction::<_, ChaptersError, _>(|transaction| {
             async move {
                 // save chapter page to db
-                let current_date = Utc::now().naive_utc();
-                let chapter_page = entity::chapter_pages::Model {
+                let chapter_page = ChapterPage {
                     id: Uuid::now_v7(),
-                    author_id: auth.current_user.id,
+                    user_id: auth.current_user.id,
                     comic_id: chapter_page.comic_id,
                     chapter_id: chapter_page.chapter_id,
                     number: chapter_page.number,
                     path: upload.path,
                     content_type: upload.content_type,
-                    created_at: current_date,
-                    updated_at: current_date,
-                }
-                .into_active_model()
-                .insert(transaction)
-                .await?;
+                    created_at: Utc::now(),
+                    updated_at: None,
+                };
+
+                diesel::insert_into(chapter_pages::table)
+                    .values(&chapter_page)
+                    .execute(transaction);
 
                 // upload image to s3
                 if let Err(err) = storage
@@ -289,7 +306,7 @@ pub async fn create_chapter_page(
 
                 Ok(chapter_page)
             }
-            .boxed()
+            .scope_boxed()
         })
         // TODO: error handling
         .await?;
@@ -321,21 +338,31 @@ pub async fn create_chapter_page(
 )]
 #[axum::debug_handler]
 pub async fn get_chapters_cursor(
-    State(db): State<DatabaseConnection>,
+    State(pool): State<Pool<AsyncPgConnection>>,
     Query(pagination): Query<PaginationParams>,
     Path(comic_id): Path<Uuid>,
 ) -> Result<Json<Vec<ChapterResponse>>, ChaptersError> {
-    let chapters = entity::chapters::Entity::find()
-        .filter(entity::chapters::Column::Id.gt(pagination.min_id))
-        .filter(entity::chapters::Column::Id.lt(pagination.max_id))
-        .filter(entity::chapters::Column::ComicId.eq(comic_id))
-        .find_with_related(entity::chapter_pages::Entity)
-        // TODO: determine good limit
-        .limit(Some(10))
-        .all(&db)
-        .await?
-        // TODO: error handling
+    let mut db = pool.get().await?;
+
+    let chapters = comic_chapters::table
+        .filter(comic_chapters::comic_id.eq(comic_id))
+        .filter(comic_chapters::id.gt(pagination.min_id))
+        .filter(comic_chapters::id.lt(pagination.max_id))
+        .limit(10)
+        .select(Chapter::as_select())
+        .load::<Chapter>(&mut db)
+        .await?;
+
+    let chapter_pages = ChapterPage::belonging_to(&chapters)
+        .select(ChapterPage::as_select())
+        .load::<ChapterPage>(&mut db)
+        .await?;
+
+    let chapter_pages = chapter_pages.grouped_by(&chapters);
+
+    let chapters = chapters
         .into_iter()
+        .zip(chapter_pages.into_iter())
         .map(|(chapter, pages)| ChapterResponse {
             id: chapter.id,
             number: chapter.number,
@@ -371,18 +398,19 @@ pub async fn get_chapters_cursor(
 )]
 #[axum::debug_handler]
 pub async fn get_chapter(
-    State(db): State<DatabaseConnection>,
+    State(pool): State<Pool<AsyncPgConnection>>,
     Path(chapter_id): Path<Uuid>,
 ) -> Result<Json<ChapterResponse>, ChaptersError> {
-    let chapter = entity::chapters::Entity::find_by_id(chapter_id)
-        .find_with_related(entity::chapter_pages::Entity)
-        .all(&db)
+    let mut db = pool.get().await?;
+
+    let chapter = comic_chapters::table
+        .find(chapter_id)
+        .first::<Chapter>(&mut db)
         .await?;
 
-    let (chapter, chapter_pages) = chapter.into_iter().next().ok_or_else(|| {
-        tracing::error!("No comic found");
-        ChaptersError::ChapterNotFound
-    })?;
+    let chapter_pages = ChapterPage::belonging_to(&chapter)
+        .load::<ChapterPage>(&mut db)
+        .await?;
 
     let chapter_pages = chapter_pages
         .into_iter()
@@ -420,33 +448,20 @@ pub async fn get_chapter(
 )]
 #[axum::debug_handler]
 pub async fn update_chapter(
-    State(db): State<DatabaseConnection>,
+    State(pool): State<Pool<AsyncPgConnection>>,
     Path(chapter_id): Path<Uuid>,
     Json(payload): Json<UpdateChapter>,
-) -> Result<Json<Uuid>, ChaptersError> {
-    let Some(chapter) = Chapter::find_by_id(chapter_id).one(&db).await? else {
-        tracing::error!("Chapter not found: {}", chapter_id);
-        return Err(ChaptersError::ChapterNotFound);
-    };
+) -> Result<(), ChaptersError> {
+    let mut db = pool.get().await?;
 
-    let mut chapter = chapter.into_active_model();
-
-    if let Some(title) = payload.title {
-        chapter.title = Set(Some(title));
-    }
-
-    if let Some(description) = payload.description {
-        chapter.description = Set(Some(description));
-    }
-
-    if let Some(number) = payload.number {
-        chapter.number = Set(number);
-    }
-
-    let chapter = chapter.update(&db).await?;
+    let _chapter = diesel::update(comic_chapters::table.find(chapter_id))
+        .set(&payload)
+        .returning(Chapter::as_returning())
+        .get_result(&mut db)
+        .await?;
     // TODO: error handling
 
-    Ok(Json(chapter.id))
+    Ok(())
 }
 
 /// Delete chapter
@@ -461,19 +476,14 @@ pub async fn update_chapter(
 )]
 #[axum::debug_handler]
 pub async fn delete_chapter(
-    State(db): State<DatabaseConnection>,
+    State(pool): State<Pool<AsyncPgConnection>>,
     Path(chapter_id): Path<Uuid>,
 ) -> Result<Json<serde_json::Value>, ChaptersError> {
-    let res = Chapter::delete_by_id(chapter_id).exec(&db).await?;
+    let mut db = pool.get().await?;
 
-    if res.rows_affected < 1 {
-        tracing::error!("Chapter not found: {}", chapter_id);
-        return Err(ChaptersError::ChapterNotFound);
-    }
+    let _res = diesel::delete(comic_chapters::table.find(chapter_id)).execute(&mut db);
 
-    Ok(Json(json!({
-        "message": format!("deleted {} chapters", res.rows_affected)
-    })))
+    Ok(Json(json!({ "message": format!("deleted chapter") })))
 }
 
 /// Delete chapter page
@@ -488,17 +498,17 @@ pub async fn delete_chapter(
 )]
 #[axum::debug_handler]
 pub async fn delete_chapter_page(
-    State(db): State<DatabaseConnection>,
+    State(pool): State<Pool<AsyncPgConnection>>,
     Path(chapter_page_id): Path<Uuid>,
 ) -> Result<Json<serde_json::Value>, ChaptersError> {
-    let res = ChapterPage::delete_by_id(chapter_page_id).exec(&db).await?;
+    let mut db = pool.get().await?;
 
-    if res.rows_affected < 1 {
-        tracing::error!("Chapter page not found: {}", chapter_page_id);
-        return Err(ChaptersError::ChapterNotFound);
-    }
+    let res = diesel::delete(chapter_pages::table.find(chapter_page_id))
+        .returning(ChapterPage::as_returning())
+        .get_result(&mut db)
+        .await?;
 
     Ok(Json(json!({
-        "message": format!("deleted {} chapter pages", res.rows_affected)
+        "message": format!("deleted chapter page: {}", res.id)
     })))
 }

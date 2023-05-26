@@ -9,7 +9,7 @@ Backend:
 
 - [Axum](https://github.com/tokio-rs/axum) Web framework
 - [Garde](https://github.com/jprochazk/garde) Validation crate
-- [SeaORM](https://github.com/SeaQL/sea-orm) Database ORM
+- [Diesel](https://github.com/diesel-rs/diesel) Database ORM
 - [TS-rs](https://github.com/Aleph-Alpha/ts-rs) Generate TS bindings from the backend models
 
 Frontend:
@@ -26,7 +26,7 @@ just install [the nix package manager](https://zero-to-nix.com/start/install) an
 nix develop
 ```
 ### Backend
-make sure you have [Rust](https://doc.rust-lang.org/book/ch01-01-installation.html) & [sea-orm-cli](https://crates.io/crates/sea-orm-cli) & [docker](https://www.docker.com/) installed (already done if using nix)
+make sure you have [Rust](https://doc.rust-lang.org/book/ch01-01-installation.html) & [diesel-cli](https://crates.io/crates/diesel_cli) & [docker](https://www.docker.com/) installed (already done if using nix)
 #### Database
 to setup a dev database run the following commands:
 
@@ -48,18 +48,14 @@ after you have all environment variables, you need to export them all in bash yo
 export $(cat .env)
 ```
 
-> this will use the migration details in the `migrations` folder to add to the database
+> this will use the migrations in the `migrations` folder to apply to the database
 ```bash
-# first install sea-orm-cli with cargo
-cargo install sea-orm-cli
+# first install diesel-cli with cargo (already installed if using nix)
+cargo install diesel-cli
 
 # in project root
-# this will commit the migrations to the database
-sea-orm-cli migrate refresh
-
-# in project root
-# this will generate entity models as Rust types from the database
-sea-orm-cli generate entity -o src/entity/
+# this will apply the migrations to the database
+diesel-cli migration run
 ```
 
 #### Run dev server
@@ -70,7 +66,7 @@ cargo run
 #### Run dev server with logging
 ```bash
 # in project root
-RUST_LOG=debug cargo run
+RUST_LOG=debug cargo run # unix-like shells only
 ```
 #### Run tests & generate TS bindings/types
 ```bash

@@ -3,11 +3,9 @@ pub mod routes;
 mod utils;
 
 use axum::{http::StatusCode, response::IntoResponse, Json};
-use sea_orm::TransactionError;
-use std::error::Error as StdError;
+use diesel::result::{DatabaseErrorKind, Error::DatabaseError};
+use diesel_async::pooled_connection::deadpool::PoolError;
 // use tracing::debug;
-
-use crate::ErrorResponse;
 
 #[derive(thiserror::Error, Debug)]
 pub enum ChaptersError {
@@ -23,8 +21,11 @@ pub enum ChaptersError {
     #[error("image size too large, maximum image size is 5MB")]
     ImageTooLarge,
 
-    #[error("sea_orm internal server error")]
-    SeaORM(#[from] sea_orm::error::DbErr),
+    #[error(transparent)]
+    Diesel(#[from] diesel::result::Error),
+
+    #[error(transparent)]
+    PoolError(#[from] PoolError),
 
     // #[error("validation error: {0}")]
     // Validator(#[from] validator::ValidationErrors),
@@ -32,37 +33,47 @@ pub enum ChaptersError {
     Conflict(String),
 }
 
-impl<E> From<TransactionError<E>> for ChaptersError
-where
-    E: StdError + Into<ChaptersError>,
-{
-    fn from(err: TransactionError<E>) -> Self {
-        match err {
-            TransactionError::Connection(db) => Self::SeaORM(db),
-            TransactionError::Transaction(err) => err.into(),
-        }
-    }
-}
-
 impl IntoResponse for ChaptersError {
     fn into_response(self) -> axum::response::Response {
-        tracing::debug!("{}", self.to_string());
+        tracing::error!("{:#?}", self);
 
-        let (status, error_message) = match self {
-            ChaptersError::ChapterNotFound => (StatusCode::NOT_FOUND, vec![self.to_string()]),
-            ChaptersError::BadRequest => (StatusCode::BAD_REQUEST, vec![self.to_string()]),
-            ChaptersError::ImageTooLarge => (StatusCode::BAD_REQUEST, vec![self.to_string()]),
-            ChaptersError::Conflict(_) => (StatusCode::CONFLICT, vec![self.to_string()]),
-            ChaptersError::SeaORM(_) => (StatusCode::INTERNAL_SERVER_ERROR, vec![self.to_string()]),
-            ChaptersError::InternalServerError => {
-                (StatusCode::INTERNAL_SERVER_ERROR, vec![self.to_string()])
+        match self {
+            ChaptersError::ChapterNotFound => {
+                (StatusCode::NOT_FOUND, Json(self.to_string())).into_response()
             }
-        };
-
-        let body = Json(ErrorResponse {
-            errors: error_message,
-        });
-
-        (status, body).into_response()
+            ChaptersError::BadRequest => {
+                (StatusCode::BAD_REQUEST, Json(self.to_string())).into_response()
+            }
+            ChaptersError::ImageTooLarge => {
+                (StatusCode::BAD_REQUEST, Json(self.to_string())).into_response()
+            }
+            ChaptersError::Conflict(_) => {
+                (StatusCode::CONFLICT, Json(self.to_string())).into_response()
+            }
+            ChaptersError::Diesel(diesel_error) => {
+                if let DatabaseError(DatabaseErrorKind::UniqueViolation, message) = diesel_error {
+                    let constraint_name = message.constraint_name();
+                    if let Some("comic_chapters_comic_id_number_key") = constraint_name {
+                        return (
+                            StatusCode::CONFLICT,
+                            Json("chapter with same number already exists"),
+                        )
+                            .into_response();
+                    }
+                } else if let DatabaseError(DatabaseErrorKind::ForeignKeyViolation, message) =
+                    diesel_error
+                {
+                    let constraint_name = message.constraint_name();
+                    if let Some("comic_chapters_comic_id_fkey") = constraint_name {
+                        return (StatusCode::NOT_FOUND, Json("comic not found")).into_response();
+                    }
+                }
+                StatusCode::INTERNAL_SERVER_ERROR.into_response()
+            }
+            ChaptersError::InternalServerError => {
+                (StatusCode::INTERNAL_SERVER_ERROR).into_response()
+            }
+            ChaptersError::PoolError(_) => (StatusCode::INTERNAL_SERVER_ERROR).into_response(),
+        }
     }
 }
