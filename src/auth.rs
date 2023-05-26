@@ -1,9 +1,7 @@
 use async_trait::async_trait;
-use axum::{
-    extract::FromRequestParts, http::StatusCode, response::IntoResponse, Json, RequestPartsExt,
-};
+use axum::{extract::FromRequestParts, http::StatusCode, response::IntoResponse, RequestPartsExt};
 use chrono::Utc;
-use diesel::{ExpressionMethods, QueryDsl, SelectableHelper};
+use diesel::{BoolExpressionMethods, ExpressionMethods, QueryDsl, SelectableHelper};
 use diesel_async::RunQueryDsl;
 use tower_cookies::{Cookie, Cookies};
 use uuid::Uuid;
@@ -11,11 +9,13 @@ use uuid::Uuid;
 use crate::{
     schema::{sessions, users},
     sessions::{models::Session, SESSION_COOKIE_NAME},
-    users::models::{User, UserResponseBrief},
+    users::models::{User, UserResponseBrief, UserRole},
     AppState, ErrorResponse, COOKIES_SECRET,
 };
 
-pub struct AuthExtractor {
+// TODO: add generic for UserRole
+// this will allow for role checking
+pub struct AuthExtractor<const USER_ROLE: u32> {
     pub current_user: UserResponseBrief,
     pub session_id: Uuid,
 }
@@ -56,7 +56,7 @@ impl IntoResponse for AuthError {
 }
 
 #[async_trait]
-impl FromRequestParts<AppState> for AuthExtractor {
+impl<const USER_ROLE: u32> FromRequestParts<AppState> for AuthExtractor<USER_ROLE> {
     type Rejection = AuthError;
 
     async fn from_request_parts(
@@ -110,14 +110,35 @@ impl FromRequestParts<AppState> for AuthExtractor {
             AuthError::InvalidSession
         })?;
 
-        let Ok((user, session)) = sessions::table
+        let mut query = sessions::table
             .inner_join(users::table)
             .filter(sessions::id.eq(session_id))
             .filter(sessions::expires_at.gt(Utc::now()))
+            .into_boxed();
+
+        // Safety: USER_ROLE is only provided by casting UserRole variants
+        let role: UserRole = unsafe { std::mem::transmute(USER_ROLE) };
+
+        match role {
+            UserRole::Admin => query = query.filter(users::role.eq(role)),
+            UserRole::Staff => {
+                query = query.filter(users::role.eq(role).or(users::role.eq(UserRole::Admin)))
+            }
+            UserRole::User => {
+                query = query.filter(
+                    users::role.eq(role).or(users::role
+                        .eq(UserRole::Admin)
+                        .or(users::role.eq(UserRole::Staff))),
+                )
+            }
+        };
+
+        let Ok((user, session)) = query
             .select((User::as_select(), Session::as_select()))
             .get_result::<(User, Session)>(&mut db)
             .await else {
             cookies.remove(remove_cookie_on_fail.clone().finish());
+            diesel::delete(sessions::table.filter(sessions::id.eq(session_id))).execute(&mut db).await?;
             return Err(AuthError::InvalidSession);
         };
 
@@ -127,6 +148,7 @@ impl FromRequestParts<AppState> for AuthExtractor {
                 displayname: user.displayname,
                 username: user.username,
                 email: user.email,
+                role: user.role,
             },
             session_id: session.id,
         })
