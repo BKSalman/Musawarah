@@ -88,9 +88,10 @@ pub struct PaginationParams {
     max_id: Uuid,
 }
 
-#[derive(Serialize, Deserialize, ToSchema, Debug)]
+#[derive(Serialize, Deserialize, ToSchema, Debug, Default)]
 pub struct ErrorResponse {
-    pub errors: Vec<String>,
+    pub error: String,
+    pub details: Option<Vec<String>>,
 }
 
 impl IntoResponse for ErrorResponse {

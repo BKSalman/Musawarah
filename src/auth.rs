@@ -25,10 +25,10 @@ pub enum AuthError {
     #[error("something went wrong")]
     SomethinWentWrong,
 
-    #[error("something went wrong")]
+    #[error(transparent)]
     PoolError(#[from] diesel_async::pooled_connection::deadpool::PoolError),
 
-    #[error("something went wrong")]
+    #[error(transparent)]
     Diesel(#[from] diesel::result::Error),
 
     #[error("invalid session")]
@@ -37,36 +37,21 @@ pub enum AuthError {
 
 impl IntoResponse for AuthError {
     fn into_response(self) -> axum::response::Response {
-        let (error_status, error_message) = match self {
-            AuthError::SomethinWentWrong => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                ErrorResponse {
-                    errors: vec![self.to_string()],
-                },
-            ),
+        tracing::error!("{:#?}", self);
+
+        match self {
+            AuthError::SomethinWentWrong => (StatusCode::INTERNAL_SERVER_ERROR).into_response(),
             AuthError::InvalidSession => (
                 StatusCode::UNAUTHORIZED,
                 ErrorResponse {
-                    errors: vec![self.to_string()],
+                    error: self.to_string(),
+                    ..Default::default()
                 },
-            ),
-            AuthError::Diesel(_) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                ErrorResponse {
-                    errors: vec![self.to_string()],
-                },
-            ),
-            AuthError::PoolError(_) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                ErrorResponse {
-                    errors: vec![self.to_string()],
-                },
-            ),
-        };
-
-        let body = Json(error_message);
-
-        (error_status, body).into_response()
+            )
+                .into_response(),
+            AuthError::Diesel(_) => (StatusCode::INTERNAL_SERVER_ERROR).into_response(),
+            AuthError::PoolError(_) => (StatusCode::INTERNAL_SERVER_ERROR).into_response(),
+        }
     }
 }
 

@@ -6,7 +6,7 @@ use axum::{
     http::{Request, StatusCode},
     middleware::Next,
     response::{IntoResponse, Response},
-    Json, RequestPartsExt,
+    RequestPartsExt,
 };
 use chrono::{Duration, Utc};
 use diesel::{ExpressionMethods, QueryDsl, SelectableHelper};
@@ -39,36 +39,21 @@ pub enum SessionError {
 
 impl IntoResponse for SessionError {
     fn into_response(self) -> axum::response::Response {
-        let (error_status, error_message) = match self {
-            SessionError::SomethingWentWrong => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                ErrorResponse {
-                    errors: vec![self.to_string()],
-                },
-            ),
+        tracing::error!("{:#?}", self);
+
+        match self {
+            SessionError::SomethingWentWrong => (StatusCode::INTERNAL_SERVER_ERROR).into_response(),
             SessionError::InvalidSession => (
                 StatusCode::UNAUTHORIZED,
                 ErrorResponse {
-                    errors: vec![self.to_string()],
+                    error: self.to_string(),
+                    ..Default::default()
                 },
-            ),
-            SessionError::Diesel(_) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                ErrorResponse {
-                    errors: vec![self.to_string()],
-                },
-            ),
-            SessionError::PoolError(_) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                ErrorResponse {
-                    errors: vec![self.to_string()],
-                },
-            ),
-        };
-
-        let body = Json(error_message);
-
-        (error_status, body).into_response()
+            )
+                .into_response(),
+            SessionError::Diesel(_) => (StatusCode::INTERNAL_SERVER_ERROR).into_response(),
+            SessionError::PoolError(_) => (StatusCode::INTERNAL_SERVER_ERROR).into_response(),
+        }
     }
 }
 

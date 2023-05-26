@@ -21,10 +21,10 @@ pub enum ChaptersError {
     #[error("image size too large, maximum image size is 5MB")]
     ImageTooLarge,
 
-    #[error("internal server error")]
+    #[error(transparent)]
     Diesel(#[from] diesel::result::Error),
 
-    #[error("internal server error")]
+    #[error(transparent)]
     PoolError(#[from] PoolError),
 
     // #[error("validation error: {0}")]
@@ -35,20 +35,20 @@ pub enum ChaptersError {
 
 impl IntoResponse for ChaptersError {
     fn into_response(self) -> axum::response::Response {
-        tracing::debug!("{:#?}", self);
+        tracing::error!("{:#?}", self);
 
         match self {
             ChaptersError::ChapterNotFound => {
-                (StatusCode::NOT_FOUND, Json(vec![self.to_string()])).into_response()
+                (StatusCode::NOT_FOUND, Json(self.to_string())).into_response()
             }
             ChaptersError::BadRequest => {
-                (StatusCode::BAD_REQUEST, Json(vec![self.to_string()])).into_response()
+                (StatusCode::BAD_REQUEST, Json(self.to_string())).into_response()
             }
             ChaptersError::ImageTooLarge => {
-                (StatusCode::BAD_REQUEST, Json(vec![self.to_string()])).into_response()
+                (StatusCode::BAD_REQUEST, Json(self.to_string())).into_response()
             }
             ChaptersError::Conflict(_) => {
-                (StatusCode::CONFLICT, Json(vec![self.to_string()])).into_response()
+                (StatusCode::CONFLICT, Json(self.to_string())).into_response()
             }
             ChaptersError::Diesel(diesel_error) => {
                 if let DatabaseError(DatabaseErrorKind::UniqueViolation, message) = diesel_error {
@@ -70,16 +70,10 @@ impl IntoResponse for ChaptersError {
                 }
                 StatusCode::INTERNAL_SERVER_ERROR.into_response()
             }
-            ChaptersError::InternalServerError => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(vec![self.to_string()]),
-            )
-                .into_response(),
-            ChaptersError::PoolError(_) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(vec![self.to_string()]),
-            )
-                .into_response(),
+            ChaptersError::InternalServerError => {
+                (StatusCode::INTERNAL_SERVER_ERROR).into_response()
+            }
+            ChaptersError::PoolError(_) => (StatusCode::INTERNAL_SERVER_ERROR).into_response(),
         }
     }
 }

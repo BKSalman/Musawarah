@@ -1,4 +1,4 @@
-use axum::{http::StatusCode, response::IntoResponse, Json};
+use axum::{http::StatusCode, response::IntoResponse};
 use diesel_async::pooled_connection::deadpool::PoolError;
 
 use crate::ErrorResponse;
@@ -25,35 +25,18 @@ impl IntoResponse for ComicGenresError {
     fn into_response(self) -> axum::response::Response {
         tracing::error!("{:#?}", self);
 
-        let (error_status, error_message) = match self {
-            ComicGenresError::PlaceHolder => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                ErrorResponse {
-                    errors: vec![self.to_string()],
-                },
-            ),
+        match self {
+            ComicGenresError::PlaceHolder => (StatusCode::INTERNAL_SERVER_ERROR).into_response(),
             ComicGenresError::InvalidGenre => (
                 StatusCode::BAD_REQUEST,
                 ErrorResponse {
-                    errors: vec![self.to_string()],
+                    error: self.to_string(),
+                    ..Default::default()
                 },
-            ),
-            ComicGenresError::PoolError(_) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                ErrorResponse {
-                    errors: vec![self.to_string()],
-                },
-            ),
-            ComicGenresError::Diesel(_) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                ErrorResponse {
-                    errors: vec![self.to_string()],
-                },
-            ),
-        };
-
-        let body = Json(error_message);
-
-        (error_status, body).into_response()
+            )
+                .into_response(),
+            ComicGenresError::PoolError(_) => (StatusCode::INTERNAL_SERVER_ERROR).into_response(),
+            ComicGenresError::Diesel(_) => (StatusCode::INTERNAL_SERVER_ERROR).into_response(),
+        }
     }
 }

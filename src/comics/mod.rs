@@ -32,10 +32,10 @@ pub enum ComicsError {
     #[error("image size too large, maximum image size is 10MB")]
     ImageTooLarge,
 
-    #[error("internal server error")]
+    #[error(transparent)]
     Diesel(#[from] diesel::result::Error),
 
-    #[error("internal server error")]
+    #[error(transparent)]
     PoolError(#[from] PoolError),
 
     // #[error("validation error: {0}")]
