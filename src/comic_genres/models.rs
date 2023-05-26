@@ -33,3 +33,22 @@ pub struct ComicGenre {
     pub id: i32,
     pub name: String,
 }
+
+#[derive(Debug, Serialize, Deserialize, ToSchema, TS, PartialEq)]
+pub struct CreateComicGenre {
+    pub name: String,
+}
+
+#[derive(AsChangeset, Debug, Serialize, Deserialize, ToSchema, TS, PartialEq)]
+#[diesel(table_name = comic_genres)]
+pub struct UpdateComicGenre {
+    pub name: Option<String>,
+    pub created_at: Option<DateTime<chrono::Utc>>,
+}
+
+#[derive(Insertable, Debug, PartialEq)]
+#[diesel(table_name = comic_genres)]
+pub struct ComicGenreInsert {
+    pub name: String,
+    pub created_at: DateTime<chrono::Utc>,
+}

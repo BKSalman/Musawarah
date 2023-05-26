@@ -65,7 +65,7 @@ pub fn users_router() -> Router<AppState> {
     ),
     tag = "Users API"
 )]
-#[axum::debug_handler]
+#[axum::debug_handler(state = AppState)]
 pub async fn create_user(
     State(state): State<AppState>,
     Json(payload): Json<CreateUser>,
@@ -280,7 +280,7 @@ pub async fn login(
 pub async fn logout(
     cookies: Cookies,
     State(pool): State<Pool<AsyncPgConnection>>,
-    auth: AuthExtractor,
+    auth: AuthExtractor<{ UserRole::User as u32 }>,
 ) -> Result<(), UsersError> {
     let mut db = pool.get().await?;
 
@@ -325,11 +325,12 @@ pub async fn logout(
     ),
     tag = "Users API"
 )]
-#[axum::debug_handler]
+#[axum::debug_handler(state = AppState)]
 pub async fn get_user_comics(
     State(pool): State<Pool<AsyncPgConnection>>,
     Path(username): Path<String>,
     Query(pagination): Query<PaginationParams>,
+    _auth: AuthExtractor<{ UserRole::User as u32 }>,
 ) -> Result<Json<Vec<ComicResponse>>, UsersError> {
     tracing::debug!("get {}'s comics", username);
 
@@ -380,6 +381,7 @@ pub async fn get_user_comics(
                     displayname: user.displayname.clone(),
                     username: user.username.clone(),
                     email: user.email.clone(),
+                    role: user.role,
                 },
                 title: comic.title,
                 description: comic.description,
@@ -420,10 +422,11 @@ pub async fn get_user_comics(
     ),
     tag = "Users API"
 )]
-#[axum::debug_handler]
+#[axum::debug_handler(state = AppState)]
 pub async fn get_user(
     State(pool): State<Pool<AsyncPgConnection>>,
     Path(user_id): Path<Uuid>,
+    _auth: AuthExtractor<{ UserRole::User as u32 }>,
 ) -> Result<Json<UserResponse>, UsersError> {
     let mut db = pool.get().await?;
 

@@ -1,13 +1,29 @@
-use crate::{comic_genres::models::ComicGenre, schema::comic_genres, AppState};
+use crate::{
+    auth::AuthExtractor, comic_genres::models::ComicGenre, schema::comic_genres,
+    users::models::UserRole, AppState,
+};
+use chrono::Utc;
+use diesel::ExpressionMethods;
 use futures_util::TryStreamExt;
 
-use super::{models::Genre, ComicGenresError};
-use axum::{extract::State, routing::get, Json, Router};
+use super::{
+    models::{ComicGenreInsert, CreateComicGenre, Genre, UpdateComicGenre},
+    ComicGenresError,
+};
+use axum::{
+    extract::{Path, State},
+    routing::{delete, get, post, put},
+    Json, Router,
+};
 use diesel::{QueryDsl, SelectableHelper};
 use diesel_async::{pooled_connection::deadpool::Pool, AsyncPgConnection, RunQueryDsl};
 
 pub fn comic_genres_router() -> Router<AppState> {
-    Router::new().route("/", get(get_comic_genres))
+    Router::new()
+        .route("/", get(get_genres))
+        .route("/", post(create_genre))
+        .route("/:genre_id", put(update_genre))
+        .route("/:genre_id", delete(delete_genre))
 }
 
 #[utoipa::path(
@@ -17,10 +33,11 @@ pub fn comic_genres_router() -> Router<AppState> {
         (status = StatusCode::OK, body = [ComicGenre]),
         (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
     ),
-    tag = "Comic Categories API"
+    tag = "Comic Genres API"
 )]
-#[axum::debug_handler]
-pub async fn get_comic_genres(
+#[axum::debug_handler(state = AppState)]
+pub async fn get_genres(
+    _auth: AuthExtractor<{ UserRole::User as u32 }>,
     State(pool): State<Pool<AsyncPgConnection>>,
 ) -> Result<Json<Vec<ComicGenre>>, ComicGenresError> {
     let mut db = pool.get().await?;
@@ -39,4 +56,82 @@ pub async fn get_comic_genres(
         .await?;
 
     Ok(Json(genres))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/comic-genres",
+    responses(
+        (status = StatusCode::OK),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
+    ),
+    tag = "Comic Genres API"
+)]
+#[axum::debug_handler(state = AppState)]
+pub async fn create_genre(
+    _auth: AuthExtractor<{ UserRole::Staff as u32 }>,
+    State(pool): State<Pool<AsyncPgConnection>>,
+    Json(payload): Json<CreateComicGenre>,
+) -> Result<(), ComicGenresError> {
+    let mut db = pool.get().await?;
+
+    diesel::insert_into(comic_genres::table)
+        .values(ComicGenreInsert {
+            name: payload.name,
+            created_at: Utc::now(),
+        })
+        .execute(&mut db)
+        .await?;
+
+    Ok(())
+}
+
+#[utoipa::path(
+    put,
+    path = "/api/v1/comic-genres/:genre_id",
+    responses(
+        (status = StatusCode::OK),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
+    ),
+    tag = "Comic Genres API"
+)]
+#[axum::debug_handler(state = AppState)]
+pub async fn update_genre(
+    _auth: AuthExtractor<{ UserRole::Admin as u32 }>,
+    State(pool): State<Pool<AsyncPgConnection>>,
+    Path(genre_id): Path<i32>,
+    Json(payload): Json<UpdateComicGenre>,
+) -> Result<(), ComicGenresError> {
+    let mut db = pool.get().await?;
+
+    diesel::update(comic_genres::table.filter(comic_genres::id.eq(genre_id)))
+        .set(payload)
+        .execute(&mut db)
+        .await?;
+
+    Ok(())
+}
+
+#[utoipa::path(
+    delete,
+    path = "/api/v1/comic-genres/:genre_id",
+    responses(
+        (status = StatusCode::OK),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
+    ),
+    tag = "Comic Genres API"
+)]
+#[axum::debug_handler(state = AppState)]
+pub async fn delete_genre(
+    _auth: AuthExtractor<{ UserRole::Admin as u32 }>,
+    State(pool): State<Pool<AsyncPgConnection>>,
+    Path(genre_id): Path<i32>,
+) -> Result<(), ComicGenresError> {
+    let mut db = pool.get().await?;
+
+    diesel::delete(comic_genres::table.filter(comic_genres::id.eq(genre_id)))
+        .execute(&mut db)
+        .await?;
+
+    Ok(())
 }

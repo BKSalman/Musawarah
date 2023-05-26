@@ -29,6 +29,7 @@ use crate::{
     common::models::ImageResponse,
     s3::{interface::Storage, Upload},
     schema::{chapter_pages, comic_chapters},
+    users::models::UserRole,
     AppState, PaginationParams,
 };
 
@@ -52,7 +53,7 @@ pub fn chapters_router() -> Router<AppState> {
         .layer(RequestBodyLimitLayer::new(10 * 1024 * 1024 /* 10mb */))
         .route("/", post(create_chapter))
         .route("/page", post(create_chapter_page))
-        .route("/:comic_id", get(get_chapters_cursor))
+        .route("/:comic_id", get(get_chapters))
         .route("/s/:chapter_id", get(get_chapter))
 }
 
@@ -69,7 +70,7 @@ pub fn chapters_router() -> Router<AppState> {
     tag = "Chapters API"
 )]
 pub async fn create_chapter(
-    auth: AuthExtractor,
+    auth: AuthExtractor<{ UserRole::User as u32 }>,
     State(pool): State<Pool<AsyncPgConnection>>,
     Json(payload): Json<CreateChapter>,
 ) -> Result<Json<ChapterResponseBrief>, ChaptersError> {
@@ -85,35 +86,6 @@ pub async fn create_chapter(
         created_at: Utc::now(),
         updated_at: None,
     };
-    // .into_active_model()
-    // .insert(&db)
-    // .await
-    // .map_err(|e| {
-    //     if let migration::DbErr::Query(sea_orm::RuntimeErr::SqlxError(sqlx::Error::Database(err))) =
-    //         e
-    //     {
-    //         match err.constraint() {
-    //             Some("chapters_title_key") => {
-    //                 tracing::error!("{}", err);
-    //                 return ChaptersError::Conflict(String::from(
-    //                     "chapter with same title already exists",
-    //                 ));
-    //             }
-    //             Some("chapters_comic_id_number_key") => {
-    //                 tracing::error!("{}", err);
-    //                 return ChaptersError::Conflict(String::from(
-    //                     "chapter with same number already exists",
-    //                 ));
-    //             }
-    //             _ => {
-    //                 tracing::error!("{}", err);
-    //                 return ChaptersError::InternalServerError;
-    //             }
-    //         }
-    //     }
-    //     tracing::error!("DB error: {}", e);
-    //     ChaptersError::InternalServerError
-    // })?;
 
     let res = diesel::insert_into(comic_chapters::table)
         .values(&chapter)
@@ -142,7 +114,7 @@ pub async fn create_chapter(
 )]
 #[axum::debug_handler(state = AppState)]
 pub async fn create_chapter_page(
-    auth: AuthExtractor,
+    auth: AuthExtractor<{ UserRole::User as u32 }>,
     State(storage): State<Storage>,
     State(pool): State<Pool<AsyncPgConnection>>,
     mut fields: Multipart,
@@ -336,8 +308,9 @@ pub async fn create_chapter_page(
     ),
     tag = "Chapters API"
 )]
-#[axum::debug_handler]
-pub async fn get_chapters_cursor(
+#[axum::debug_handler(state = AppState)]
+pub async fn get_chapters(
+    _auth: AuthExtractor<{ UserRole::User as u32 }>,
     State(pool): State<Pool<AsyncPgConnection>>,
     Query(pagination): Query<PaginationParams>,
     Path(comic_id): Path<Uuid>,
@@ -396,8 +369,9 @@ pub async fn get_chapters_cursor(
     ),
     tag = "Chapters API"
 )]
-#[axum::debug_handler]
+#[axum::debug_handler(state = AppState)]
 pub async fn get_chapter(
+    _auth: AuthExtractor<{ UserRole::User as u32 }>,
     State(pool): State<Pool<AsyncPgConnection>>,
     Path(chapter_id): Path<Uuid>,
 ) -> Result<Json<ChapterResponse>, ChaptersError> {
@@ -446,19 +420,26 @@ pub async fn get_chapter(
     ),
     tag = "Chapters API"
 )]
-#[axum::debug_handler]
+#[axum::debug_handler(state = AppState)]
 pub async fn update_chapter(
+    auth: AuthExtractor<{ UserRole::User as u32 }>,
     State(pool): State<Pool<AsyncPgConnection>>,
     Path(chapter_id): Path<Uuid>,
     Json(payload): Json<UpdateChapter>,
 ) -> Result<(), ChaptersError> {
     let mut db = pool.get().await?;
 
-    let _chapter = diesel::update(comic_chapters::table.find(chapter_id))
-        .set(&payload)
-        .returning(Chapter::as_returning())
-        .get_result(&mut db)
-        .await?;
+    // TODO: check if the user is the author of the chapter
+
+    let _chapter = diesel::update(
+        comic_chapters::table
+            .filter(comic_chapters::id.eq(chapter_id))
+            .filter(comic_chapters::user_id.eq(auth.current_user.id)),
+    )
+    .set(&payload)
+    .returning(Chapter::as_returning())
+    .get_result(&mut db)
+    .await?;
     // TODO: error handling
 
     Ok(())
@@ -474,14 +455,22 @@ pub async fn update_chapter(
     ),
     tag = "Chapters API"
 )]
-#[axum::debug_handler]
+#[axum::debug_handler(state = AppState)]
 pub async fn delete_chapter(
+    auth: AuthExtractor<{ UserRole::User as u32 }>,
     State(pool): State<Pool<AsyncPgConnection>>,
     Path(chapter_id): Path<Uuid>,
 ) -> Result<Json<serde_json::Value>, ChaptersError> {
     let mut db = pool.get().await?;
 
-    let _res = diesel::delete(comic_chapters::table.find(chapter_id)).execute(&mut db);
+    // TODO: check if user is the author of the chapter
+
+    let _res = diesel::delete(
+        comic_chapters::table
+            .filter(comic_chapters::id.eq(chapter_id))
+            .filter(comic_chapters::user_id.eq(auth.current_user.id)),
+    )
+    .execute(&mut db);
 
     Ok(Json(json!({ "message": format!("deleted chapter") })))
 }
@@ -496,17 +485,22 @@ pub async fn delete_chapter(
     ),
     tag = "Chapters API"
 )]
-#[axum::debug_handler]
+#[axum::debug_handler(state = AppState)]
 pub async fn delete_chapter_page(
+    auth: AuthExtractor<{ UserRole::User as u32 }>,
     State(pool): State<Pool<AsyncPgConnection>>,
     Path(chapter_page_id): Path<Uuid>,
 ) -> Result<Json<serde_json::Value>, ChaptersError> {
     let mut db = pool.get().await?;
 
-    let res = diesel::delete(chapter_pages::table.find(chapter_page_id))
-        .returning(ChapterPage::as_returning())
-        .get_result(&mut db)
-        .await?;
+    let res = diesel::delete(
+        chapter_pages::table
+            .filter(chapter_pages::id.eq(chapter_page_id))
+            .filter(chapter_pages::user_id.eq(auth.current_user.id)),
+    )
+    .returning(ChapterPage::as_returning())
+    .get_result(&mut db)
+    .await?;
 
     Ok(Json(json!({
         "message": format!("deleted chapter page: {}", res.id)

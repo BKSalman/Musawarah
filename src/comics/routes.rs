@@ -17,7 +17,7 @@ use crate::{
     chapters::models::{Chapter, ChapterResponseBrief},
     comic_genres::models::{ComicGenre, Genre, GenreMapping},
     schema::{comic_genres, comic_genres_mapping, comics, users},
-    users::models::{User, UserResponseBrief},
+    users::models::{User, UserResponseBrief, UserRole},
     AppState, PaginationParams,
 };
 
@@ -29,7 +29,7 @@ use super::{
 pub fn comics_router() -> Router<AppState> {
     Router::new()
         .route("/", post(create_comic))
-        .route("/", get(get_comics_cursor))
+        .route("/", get(get_comics))
         .route("/:comic_id", put(update_comic))
         .route("/:comic_id", delete(delete_comic))
         .route("/:comic_id", get(get_comic))
@@ -51,7 +51,7 @@ pub fn comics_router() -> Router<AppState> {
     tag = "Comics API"
 )]
 pub async fn create_comic(
-    auth: AuthExtractor,
+    auth: AuthExtractor<{ UserRole::User as u32 }>,
     State(pool): State<Pool<AsyncPgConnection>>,
     Json(payload): Json<CreateComic>,
 ) -> Result<Json<ComicResponse>, ComicsError> {
@@ -137,8 +137,9 @@ pub async fn create_comic(
     ),
     tag = "Comics API"
 )]
-#[axum::debug_handler]
+#[axum::debug_handler(state = AppState)]
 pub async fn get_comic(
+    _auth: AuthExtractor<{ UserRole::User as u32 }>,
     State(pool): State<Pool<AsyncPgConnection>>,
     Path(comic_id): Path<Uuid>,
 ) -> Result<Json<ComicResponse>, ComicsError> {
@@ -169,6 +170,7 @@ pub async fn get_comic(
             displayname: user.displayname,
             username: user.username,
             email: user.email,
+            role: user.role,
         },
         title: comic.title,
         description: comic.description,
@@ -193,7 +195,7 @@ pub async fn get_comic(
     Ok(Json(comic))
 }
 
-/// Get comics with pagination
+/// Get comics with pagination and genre filtering
 #[utoipa::path(
     get,
     path = "/api/v1/comics",
@@ -207,7 +209,7 @@ pub async fn get_comic(
     tag = "Comics API"
 )]
 #[axum::debug_handler]
-pub async fn get_comics_cursor(
+pub async fn get_comics(
     State(pool): State<Pool<AsyncPgConnection>>,
     Query(params): Query<ComicsParams>,
 ) -> Result<Json<Vec<ComicResponse>>, ComicsError> {
@@ -260,6 +262,7 @@ pub async fn get_comics_cursor(
                         displayname: user.displayname,
                         username: user.username,
                         email: user.email,
+                        role: user.role,
                     },
                     chapters: chapters
                         .into_iter()
@@ -294,25 +297,30 @@ pub async fn get_comics_cursor(
     ),
     tag = "Comics API"
 )]
-#[axum::debug_handler]
+#[axum::debug_handler(state = AppState)]
 pub async fn update_comic(
+    auth: AuthExtractor<{ UserRole::User as u32 }>,
     State(pool): State<Pool<AsyncPgConnection>>,
     Path(comic_id): Path<Uuid>,
     Json(payload): Json<UpdateComic>,
 ) -> Result<Json<Uuid>, ComicsError> {
     let mut db = pool.get().await?;
 
-    let updated_comic = diesel::update(comics::table.find(comic_id))
-        .set(payload)
-        .returning(Comic::as_returning())
-        .get_result(&mut db)
-        .await
-        .map_err(|e| {
-            if let diesel::result::Error::NotFound = e {
-                return ComicsError::ComicNotFound;
-            }
-            e.into()
-        })?;
+    let updated_comic = diesel::update(
+        comics::table
+            .filter(comics::id.eq(comic_id))
+            .filter(comics::user_id.eq(auth.current_user.id)),
+    )
+    .set(payload)
+    .returning(Comic::as_returning())
+    .get_result(&mut db)
+    .await
+    .map_err(|e| {
+        if let diesel::result::Error::NotFound = e {
+            return ComicsError::ComicNotFound;
+        }
+        e.into()
+    })?;
     // TODO: error handling
 
     Ok(Json(updated_comic.id))
@@ -328,17 +336,22 @@ pub async fn update_comic(
     ),
     tag = "Comics API"
 )]
-#[axum::debug_handler]
+#[axum::debug_handler(state = AppState)]
 pub async fn delete_comic(
+    auth: AuthExtractor<{ UserRole::User as u32 }>,
     State(pool): State<Pool<AsyncPgConnection>>,
     Path(comic_id): Path<Uuid>,
 ) -> Result<Json<Uuid>, ComicsError> {
     let mut db = pool.get().await?;
 
-    let deleted_comic = diesel::delete(comics::table.find(comic_id))
-        .returning(Comic::as_returning())
-        .get_result(&mut db)
-        .await?;
+    let deleted_comic = diesel::delete(
+        comics::table
+            .filter(comics::id.eq(comic_id))
+            .filter(comics::user_id.eq(auth.current_user.id)),
+    )
+    .returning(Comic::as_returning())
+    .get_result(&mut db)
+    .await?;
 
     Ok(Json(deleted_comic.id))
 }
