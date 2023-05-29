@@ -9,7 +9,7 @@ use axum::{
 };
 use diesel_async::pooled_connection::{deadpool::Pool, AsyncDieselConnectionManager};
 use diesel_migrations_async::{embed_migrations, EmbeddedMigrations};
-use dotenv::dotenv;
+use dotenvy::dotenv;
 use musawarah::{
     chapters::routes::chapters_router, comic_genres::routes::comic_genres_router,
     comics::routes::comics_router, migrations::run_migrations, s3::helpers::setup_storage,
@@ -69,10 +69,14 @@ async fn main() {
     COOKIES_SECRET.set(Key::from(&secret)).ok();
 
     let cors = CorsLayer::new()
-        .allow_methods([Method::GET, Method::POST])
+        .allow_methods([Method::GET, Method::POST, Method::DELETE, Method::PUT])
         .allow_headers([AUTHORIZATION, CONTENT_TYPE])
         // FIXME: add proper allowed origins
-        .allow_origin(Any);
+        .allow_origin([
+            "http://locahost:6060".parse().unwrap(),
+            "http://localhost:5173".parse().unwrap(),
+        ])
+        .allow_credentials(true);
 
     let app = Router::new()
         .merge(SwaggerUi::new("/swagger-ui").url("/api-doc/openapi.json", ApiDoc::openapi()))
