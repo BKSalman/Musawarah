@@ -28,6 +28,9 @@ diesel::table! {
         number -> Int4,
         created_at -> Timestamptz,
         updated_at -> Nullable<Timestamptz>,
+        published_at -> Nullable<Timestamptz>,
+        is_visible -> Bool,
+        rating -> Nullable<Float8>,
         user_id -> Uuid,
         comic_id -> Uuid,
     }
@@ -73,6 +76,11 @@ diesel::table! {
         description -> Nullable<Text>,
         created_at -> Timestamptz,
         updated_at -> Nullable<Timestamptz>,
+        rating -> Nullable<Float8>,
+        is_visible -> Bool,
+        published_at -> Nullable<Timestamptz>,
+        poster_path -> Nullable<Text>,
+        poster_content_type -> Nullable<Text>,
         user_id -> Uuid,
     }
 }
@@ -97,6 +105,15 @@ diesel::table! {
 }
 
 diesel::table! {
+    user_links (id) {
+        id -> Uuid,
+        name -> Text,
+        link -> Text,
+        user_id -> Uuid,
+    }
+}
+
+diesel::table! {
     use diesel::sql_types::*;
     use super::sql_types::Userrole;
 
@@ -108,6 +125,7 @@ diesel::table! {
         displayname -> Text,
         email -> Text,
         phone_number -> Nullable<Text>,
+        bio -> Nullable<Text>,
         password -> Text,
         role -> Userrole,
         created_at -> Timestamptz,
@@ -139,5 +157,6 @@ diesel::allow_tables_to_appear_in_same_query!(
     comics,
     profile_images,
     sessions,
+    user_links,
     users,
 );

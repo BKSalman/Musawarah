@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS users (
     displayname TEXT NOT NULL,
     email TEXT NOT NULL,
     phone_number TEXT,
+    bio TEXT,
     password TEXT NOT NULL,
     role UserRole NOT NULL,
     created_at TIMESTAMPTZ NOT NULL,

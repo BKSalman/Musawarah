@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use chrono::DateTime;
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -19,8 +19,13 @@ pub struct Comic {
     pub id: Uuid,
     pub title: String,
     pub description: Option<String>,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<chrono::Utc>,
+    pub updated_at: Option<DateTime<chrono::Utc>>,
+    pub rating: Option<f64>,
+    pub is_visible: bool,
+    pub published_at: Option<DateTime<chrono::Utc>>,
+    pub poster_path: Option<String>,
+    pub poster_content_type: Option<String>,
     pub user_id: Uuid,
 }
 
@@ -40,7 +45,8 @@ pub struct ComicResponse {
 pub struct CreateComic {
     pub title: String,
     pub description: Option<String>,
-    pub categories: Option<Vec<i32>>,
+    pub genres: Option<Vec<i32>>,
+    pub is_visible: bool,
 }
 
 #[derive(AsChangeset, Deserialize, ToSchema)]

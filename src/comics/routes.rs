@@ -66,6 +66,11 @@ pub async fn create_comic(
                     user_id: auth.current_user.id,
                     title: payload.title,
                     description: payload.description,
+                    is_visible: payload.is_visible,
+                    published_at: None,
+                    rating: None,
+                    poster_path: None,
+                    poster_content_type: None,
                     created_at: Utc::now(),
                     updated_at: None,
                 };
@@ -86,7 +91,7 @@ pub async fn create_comic(
                     genres: vec![],
                 };
 
-                if let Some(genres) = payload.categories {
+                if let Some(genres) = payload.genres {
                     let db_genre_mappings: Vec<GenreMapping> = genres
                         .iter()
                         .map(|genre| GenreMapping {
@@ -179,8 +184,10 @@ pub async fn get_comic(
             .into_iter()
             .map(|chapter| ChapterResponseBrief {
                 id: chapter.id,
+                title: chapter.title,
                 number: chapter.number,
                 description: chapter.description,
+                created_at: chapter.created_at,
             })
             .collect(),
         genres: genres
@@ -268,8 +275,10 @@ pub async fn get_comics(
                         .into_iter()
                         .map(|chapter| ChapterResponseBrief {
                             id: chapter.id,
+                            title: chapter.title,
                             number: chapter.number,
                             description: chapter.description,
+                            created_at: chapter.created_at,
                         })
                         .collect(),
                     genres: genres

@@ -37,7 +37,7 @@ pub fn comic_genres_router() -> Router<AppState> {
 )]
 #[axum::debug_handler(state = AppState)]
 pub async fn get_genres(
-    _auth: AuthExtractor<{ UserRole::User as u32 }>,
+    // _auth: AuthExtractor<{ UserRole::User as u32 }>,
     State(pool): State<Pool<AsyncPgConnection>>,
 ) -> Result<Json<Vec<ComicGenre>>, ComicGenresError> {
     let mut db = pool.get().await?;

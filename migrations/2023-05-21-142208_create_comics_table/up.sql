@@ -5,6 +5,11 @@ CREATE TABLE IF NOT EXISTS comics (
     description TEXT,
     created_at TIMESTAMPTZ NOT NULL,
     updated_at TIMESTAMPTZ,
+    rating FLOAT,
+    is_visible BOOLEAN NOT NULL,
+    published_at TIMESTAMPTZ,
+    poster_path TEXT,
+    poster_content_type TEXT,
     user_id UUID NOT NULL,
 
     FOREIGN KEY(user_id)

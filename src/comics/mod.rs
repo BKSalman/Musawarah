@@ -1,9 +1,11 @@
-use axum::{http::StatusCode, response::IntoResponse, Json};
+use axum::{http::StatusCode, response::IntoResponse};
 use diesel::result::{DatabaseErrorKind, Error::DatabaseError};
 use diesel_async::pooled_connection::deadpool::PoolError;
 use serde::Deserialize;
 use utoipa::IntoParams;
 use uuid::Uuid;
+
+use crate::ErrorResponse;
 
 pub mod models;
 pub mod routes;
@@ -58,11 +60,20 @@ impl IntoResponse for ComicsError {
                     if constraint_name == "comics_title_key" {
                         return (
                             StatusCode::CONFLICT,
-                            Json("comic with same title already exists"),
+                            ErrorResponse {
+                                error: String::from("comic with same title already exists"),
+                                ..Default::default()
+                            },
                         )
                             .into_response();
                     } else if constraint_name == "comic_genres_mapping_pkey" {
-                        return (StatusCode::CONFLICT, Json("duplicate comic genre"))
+                        return (
+                            StatusCode::CONFLICT,
+                            ErrorResponse {
+                                error: String::from("duplicate comic genre"),
+                                ..Default::default()
+                            },
+                        )
                             .into_response();
                     }
                 }

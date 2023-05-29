@@ -59,9 +59,9 @@ pub fn users_router() -> Router<AppState> {
         description = "Validation:\n- username: min = 5, max = 60\n- password: min = 8",
         content_type = "application/json"),
     responses(
-        (status = 200, description = "User successfully created", body = UserReponse),
-        (status = StatusCode::BAD_REQUEST, description = "Fields validation error", body = ErrorHandlingResponse),
-        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
+        (status = 200, description = "User successfully created", body = UserResponse),
+        (status = StatusCode::BAD_REQUEST, description = "Fields validation error", body = ErrorResponse),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorResponse),
     ),
     tag = "Users API"
 )]
@@ -99,6 +99,7 @@ pub async fn create_user(
                     email: payload.email.clone(),
                     phone_number: None,
                     password: hashed_password,
+                    bio: None,
                     role: UserRole::User,
                     created_at: Utc::now().naive_utc(),
                     updated_at: None,
@@ -152,7 +153,7 @@ pub async fn create_user(
                     .get_result(transaction)
                     .await?;
 
-                return Ok((user, profile_image));
+                Ok((user, profile_image))
             }
             .scope_boxed()
         })
@@ -192,6 +193,8 @@ pub async fn login(
     cookies: Cookies,
     Json(payload): Json<UserLogin>,
 ) -> Result<(), UsersError> {
+    // TODO: add Result<Json<UserLogin>> and handle error
+
     payload.validate(&())?;
 
     let mut db = pool.get().await?;
@@ -215,7 +218,7 @@ pub async fn login(
             if let diesel::result::Error::NotFound = e {
                 return UsersError::InvalidCredentials;
             }
-            return UsersError::Diesel(e);
+            UsersError::Diesel(e)
         })?;
 
     let parsed_password = PasswordHash::new(&user.password)?;
@@ -390,8 +393,10 @@ pub async fn get_user_comics(
                     .into_iter()
                     .map(|chapter| ChapterResponseBrief {
                         id: chapter.id,
+                        title: chapter.title,
                         description: chapter.description,
                         number: chapter.number,
+                        created_at: chapter.created_at,
                     })
                     .collect(),
                 genres: genres

@@ -59,6 +59,7 @@ pub struct User {
     pub displayname: String,
     pub email: String,
     pub phone_number: Option<String>,
+    pub bio: Option<String>,
     pub password: String,
     pub role: UserRole,
     pub created_at: NaiveDateTime,

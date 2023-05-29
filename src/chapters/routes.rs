@@ -85,18 +85,23 @@ pub async fn create_chapter(
         description: payload.description,
         created_at: Utc::now(),
         updated_at: None,
+        rating: None,
+        published_at: None,
+        is_visible: false,
     };
 
-    let res = diesel::insert_into(comic_chapters::table)
+    let chapter = diesel::insert_into(comic_chapters::table)
         .values(&chapter)
         .returning(Chapter::as_returning())
         .get_result::<Chapter>(&mut db)
         .await?;
 
     Ok(Json(ChapterResponseBrief {
-        id: res.id,
-        number: res.number,
-        description: res.description,
+        id: chapter.id,
+        title: chapter.title,
+        number: chapter.number,
+        description: chapter.description,
+        created_at: chapter.created_at,
     }))
 }
 
@@ -339,9 +344,10 @@ pub async fn get_chapters(
         .zip(chapter_pages.into_iter())
         .map(|(chapter, pages)| ChapterResponse {
             id: chapter.id,
+            title: chapter.title,
             number: chapter.number,
             description: chapter.description,
-            created_at: chapter.created_at.to_string(),
+            created_at: chapter.created_at,
             pages: pages
                 .into_iter()
                 .map(|page| ChapterPageResponse {
@@ -402,10 +408,11 @@ pub async fn get_chapter(
 
     let chapter = ChapterResponse {
         id: chapter.id,
+        title: chapter.title,
         number: chapter.number,
         description: chapter.description,
         pages: chapter_pages,
-        created_at: chapter.created_at.to_string(),
+        created_at: chapter.created_at,
     };
 
     Ok(Json(chapter))

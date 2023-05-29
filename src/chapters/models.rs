@@ -26,6 +26,9 @@ pub struct Chapter {
     pub number: i32,
     pub created_at: DateTime<chrono::Utc>,
     pub updated_at: Option<DateTime<chrono::Utc>>,
+    pub published_at: Option<DateTime<chrono::Utc>>,
+    pub is_visible: bool,
+    pub rating: Option<f64>,
     pub user_id: Uuid,
     pub comic_id: Uuid,
 }
@@ -45,14 +48,6 @@ pub struct ChapterPage {
     pub user_id: Uuid,
     pub created_at: DateTime<chrono::Utc>,
     pub updated_at: Option<DateTime<chrono::Utc>>,
-}
-
-#[derive(Serialize, Deserialize, ToSchema, TS, Debug)]
-#[ts(export)]
-pub struct ChapterResponseBrief {
-    pub id: Uuid,
-    pub number: i32,
-    pub description: Option<String>,
 }
 
 #[derive(Deserialize, ToSchema, Debug)]
@@ -75,10 +70,21 @@ pub struct UpdateChapter {
 #[ts(export)]
 pub struct ChapterResponse {
     pub id: Uuid,
+    pub title: Option<String>,
     pub number: i32,
     pub description: Option<String>,
     pub pages: Vec<ChapterPageResponse>,
-    pub created_at: String,
+    pub created_at: DateTime<chrono::Utc>,
+}
+
+#[derive(Serialize, Deserialize, ToSchema, TS, Debug)]
+#[ts(export)]
+pub struct ChapterResponseBrief {
+    pub id: Uuid,
+    pub title: Option<String>,
+    pub number: i32,
+    pub description: Option<String>,
+    pub created_at: DateTime<chrono::Utc>,
 }
 
 #[derive(ToSchema)]
