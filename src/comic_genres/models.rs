@@ -29,6 +29,7 @@ pub struct GenreMapping {
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, TS, PartialEq)]
+#[ts(export)]
 pub struct ComicGenre {
     pub id: i32,
     pub name: String,
