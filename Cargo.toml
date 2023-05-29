@@ -51,6 +51,7 @@ tracing-appender = "0.2.2"
 diesel = { version = "2.0.4", features = ["postgres", "chrono", "uuid"] }
 diesel-async = { version = "0.2.2", features = ["tokio-postgres", "deadpool"] }
 diesel_migrations_async = { git = "https://github.com/aumetra/diesel_migrations_async", features = ["postgres"] }
+toml = "0.7.4"
 
 [patch.crates-io]
 utoipa = { git = "https://github.com/juhaku/utoipa", rev = "b7020f44890e4472bc17c825f8db3455f30c27a4" }

@@ -13,18 +13,16 @@ use dotenvy::dotenv;
 use musawarah::{
     chapters::routes::chapters_router, comic_genres::routes::comic_genres_router,
     comics::routes::comics_router, migrations::run_migrations, s3::helpers::setup_storage,
-    sessions::refresh_session, users::routes::users_router, ApiDoc, AppState, COOKIES_SECRET,
+    sessions::refresh_session, users::routes::users_router, ApiDoc, AppState, Config, ConfigError,
+    COOKIES_SECRET,
 };
 use rand::Rng;
 use std::{
-    env,
+    env, fs,
     net::{Ipv4Addr, SocketAddr},
 };
 use tower_cookies::{CookieManagerLayer, Key};
-use tower_http::{
-    cors::{Any, CorsLayer},
-    trace::TraceLayer,
-};
+use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use tracing_subscriber::{
     prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt, EnvFilter,
 };
@@ -62,11 +60,36 @@ async fn main() {
         storage: setup_storage().expect("storage"),
     };
 
-    // TODO: add to config file
-    let mut secret = [0u8; 64];
-    rand::thread_rng().fill(&mut secret);
+    let config = match Config::load_config() {
+        Ok(config) => config,
+        Err(err) => match &err {
+            ConfigError::IoError(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                tracing::warn!("GENERATING CONFIG FILE WITH SECRET");
 
-    COOKIES_SECRET.set(Key::from(&secret)).ok();
+                let mut secret = [0u8; 64];
+                rand::thread_rng().fill(&mut secret);
+
+                let secret = String::from_utf8_lossy(&secret).to_string();
+
+                let config = Config {
+                    cookie_secret: secret,
+                };
+
+                let config_str = toml::to_string(&config).unwrap();
+
+                fs::write("config.toml", config_str).unwrap();
+
+                config
+            }
+            _ => {
+                panic!("{:#?}", err);
+            }
+        },
+    };
+
+    COOKIES_SECRET
+        .set(Key::from(config.cookie_secret.as_bytes()))
+        .ok();
 
     let cors = CorsLayer::new()
         .allow_methods([Method::GET, Method::POST, Method::DELETE, Method::PUT])

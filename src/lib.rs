@@ -1,9 +1,12 @@
+use std::fs;
+
 use axum::{extract::FromRef, response::IntoResponse};
 use diesel_async::{pooled_connection::deadpool::Pool, AsyncPgConnection};
 use once_cell::sync::OnceCell;
 use s3::interface::Storage;
 use serde::{Deserialize, Serialize};
 use tower_cookies::cookie::Key;
+use ts_rs::TS;
 use utoipa::{
     openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme},
     IntoParams, Modify, OpenApi, ToSchema,
@@ -20,6 +23,27 @@ pub mod s3;
 pub mod schema;
 pub mod sessions;
 pub mod users;
+
+#[derive(thiserror::Error, Debug)]
+pub enum ConfigError {
+    #[error(transparent)]
+    IoError(#[from] std::io::Error),
+
+    #[error(transparent)]
+    TomlError(#[from] toml::de::Error),
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Config {
+    pub cookie_secret: String,
+}
+
+impl Config {
+    pub fn load_config() -> Result<Self, ConfigError> {
+        let config_file = fs::read_to_string("config.toml")?;
+        toml::from_str::<Config>(&config_file).map_err(Into::into)
+    }
+}
 
 #[derive(Clone, FromRef)]
 pub struct AppState {
@@ -81,7 +105,6 @@ pub static COOKIES_SECRET: OnceCell<Key> = OnceCell::new();
         (name = "Comic Genres API"),
     )
 )]
-
 pub struct ApiDoc;
 
 #[derive(Debug, Deserialize, IntoParams)]
@@ -92,7 +115,8 @@ pub struct PaginationParams {
     max_id: Uuid,
 }
 
-#[derive(Serialize, Deserialize, ToSchema, Debug, Default)]
+#[derive(Serialize, Deserialize, ToSchema, Debug, Default, TS)]
+#[ts(export)]
 pub struct ErrorResponse {
     pub error: String,
     pub details: Option<Vec<String>>,
