@@ -256,7 +256,8 @@ pub async fn create_chapter_page(
 
                 diesel::insert_into(chapter_pages::table)
                     .values(&chapter_page)
-                    .execute(transaction);
+                    .execute(transaction)
+                    .await?;
 
                 // upload image to s3
                 if let Err(err) = storage
@@ -383,14 +384,15 @@ pub async fn get_chapter(
         .await?;
 
     let chapter_pages = ChapterPage::belonging_to(&chapter)
+        .order(chapter_pages::number.asc())
         .load::<ChapterPage>(&mut db)
         .await?;
 
     let chapter_pages = chapter_pages
         .into_iter()
         .map(|chapter_page| ChapterPageResponse {
-            id: chapter.id,
-            number: chapter.number,
+            id: chapter_page.id,
+            number: chapter_page.number,
             image: ImageResponse {
                 content_type: chapter_page.content_type,
                 path: chapter_page.path,
