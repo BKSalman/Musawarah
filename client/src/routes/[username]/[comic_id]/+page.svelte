@@ -9,10 +9,17 @@
 
 <div class="comic-container">
     <h1>{comic.title}</h1>
-    <div>{comic.description}</div>
+    {#if comic.description}
+        <div>{comic.description}</div>
+    {/if}
     {#each comic.chapters as chapter}
+        {#if chapter.title}
+            <div>{chapter.title}</div>
+        {/if}
         <div>{chapter.number}</div>
-        <div>{chapter.description}</div>
+        {#if chapter.description}
+            <div>{chapter.description}</div>
+        {/if}
         <a href={`${window.location}/${chapter.id}`}>lmao</a>
     {/each}
 </div>
