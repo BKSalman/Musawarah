@@ -1,7 +1,7 @@
-import type { ComicResponseBrief } from '../../../bindings/ComicResponseBrief';
-import type { PageServerData } from './$types';
+import type { ComicResponse } from '../../../bindings/ComicResponse';
+import type { PageServerLoad } from './$types';
 
-export async function load({fetch}) {
+export const load = (async ({ fetch }) => {
     const res = await fetch("http://127.0.0.1:6060/api/v1/comics");
 
     if (res.status != 200) {
@@ -11,9 +11,9 @@ export async function load({fetch}) {
         };
     }
 
-    const data: ComicResponseBrief[] = await res.json();
+    const data: ComicResponse[] = await res.json();
 
     return {
         comics: data
     };
-}
+}) satisfies PageServerLoad;

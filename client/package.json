@@ -12,23 +12,23 @@
 	"devDependencies": {
 		"@fontsource/fira-mono": "^4.5.10",
 		"@neoconfetti/svelte": "^1.0.0",
-		"@sveltejs/adapter-auto": "^2.0.0",
-		"@sveltejs/kit": "^1.15.5",
+		"@sveltejs/adapter-auto": "^2.1.0",
+		"@sveltejs/kit": "^1.20.0",
 		"@types/cookie": "^0.5.1",
 		"autoprefixer": "^10.4.14",
-		"svelte": "^3.58.0",
-		"svelte-check": "^3.2.0",
+		"svelte": "^3.59.1",
+		"svelte-check": "^3.4.3",
 		"svelte-hamburgers": "^4.0.1",
-		"sveltekit-superforms": "^0.6.18",
-		"tslib": "^2.5.0",
+		"sveltekit-superforms": "^0.8.7",
+		"tslib": "^2.5.2",
 		"typescript": "^4.9.5",
-		"vite": "^4.2.1",
+		"vite": "^4.3.9",
 		"zod": "^3.21.4"
 	},
 	"type": "module",
 	"dependencies": {
 		"@fortawesome/free-brands-svg-icons": "^6.4.0",
 		"@fortawesome/free-solid-svg-icons": "^6.4.0",
-		"svelte-fa": "^3.0.3"
+		"svelte-fa": "^3.0.4"
 	}
 }

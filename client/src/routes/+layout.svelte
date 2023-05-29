@@ -19,6 +19,7 @@
 <style>
     .layout-container {
         display: grid;
+        height: 100%;
         grid-template-columns: 1fr 7fr;
     }
 </style>

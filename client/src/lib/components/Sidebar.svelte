@@ -1,7 +1,7 @@
 <script lang="ts">
     import Text from "$lib/components/Text.svelte";
     import Fa from "svelte-fa";
-    import { faHome } from "@fortawesome/free-solid-svg-icons";
+    import { faHome, faUser } from "@fortawesome/free-solid-svg-icons";
 
     export let open: boolean;
 </script>
@@ -12,6 +12,13 @@
             <a class="link" href="/"
                 ><Fa size="1.5x" icon={faHome} />
                 {#if open}<Text fontSize="xl" --margin="0 0 0 1rem">Home</Text
+                    >{/if}</a
+            >
+        </li>
+        <li>
+            <a class="link" href="/login"
+                ><Fa size="1.5x" icon={faUser} />
+                {#if open}<Text fontSize="xl" --margin="0 0 0 1rem">Login</Text
                     >{/if}</a
             >
         </li>
