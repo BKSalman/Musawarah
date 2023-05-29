@@ -53,12 +53,22 @@ impl IntoResponse for ChaptersError {
             ChaptersError::Diesel(diesel_error) => {
                 if let DatabaseError(DatabaseErrorKind::UniqueViolation, message) = diesel_error {
                     let constraint_name = message.constraint_name();
-                    if let Some("comic_chapters_comic_id_number_key") = constraint_name {
-                        return (
-                            StatusCode::CONFLICT,
-                            Json("chapter with same number already exists"),
-                        )
-                            .into_response();
+                    match constraint_name {
+                        Some("comic_chapters_comic_id_number_key") => {
+                            return (
+                                StatusCode::CONFLICT,
+                                Json("chapter with same number already exists"),
+                            )
+                                .into_response();
+                        }
+                        Some("chapter_pages_chapter_id_number_key") => {
+                            return (
+                                StatusCode::CONFLICT,
+                                Json("chapter page with same number already exists"),
+                            )
+                                .into_response();
+                        }
+                        _ => {}
                     }
                 } else if let DatabaseError(DatabaseErrorKind::ForeignKeyViolation, message) =
                     diesel_error
