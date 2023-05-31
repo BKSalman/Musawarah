@@ -126,6 +126,15 @@ impl<const USER_ROLE: u32> FromRequestParts<AppState> for AuthExtractor<USER_ROL
             }
             UserRole::User => {
                 query = query.filter(
+                    users::role
+                        .eq(role)
+                        .or(users::role.eq(UserRole::Admin).or(users::role
+                            .eq(UserRole::Staff)
+                            .or(users::role.eq(UserRole::VerifiedUser)))),
+                )
+            }
+            UserRole::VerifiedUser => {
+                query = query.filter(
                     users::role.eq(role).or(users::role
                         .eq(UserRole::Admin)
                         .or(users::role.eq(UserRole::Staff))),

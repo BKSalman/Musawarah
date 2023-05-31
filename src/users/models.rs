@@ -25,6 +25,7 @@ pub enum UserRole {
     Admin,
     Staff,
     User,
+    VerifiedUser,
 }
 
 impl ToSql<crate::schema::sql_types::Userrole, Pg> for UserRole {
@@ -33,6 +34,7 @@ impl ToSql<crate::schema::sql_types::Userrole, Pg> for UserRole {
             UserRole::Admin => out.write_all(b"admin"),
             UserRole::Staff => out.write_all(b"staff"),
             UserRole::User => out.write_all(b"user"),
+            UserRole::VerifiedUser => out.write_all(b"verified_user"),
         }?;
         Ok(IsNull::No)
     }
@@ -44,6 +46,7 @@ impl FromSql<crate::schema::sql_types::Userrole, Pg> for UserRole {
             b"admin" => Ok(UserRole::Admin),
             b"staff" => Ok(UserRole::Staff),
             b"user" => Ok(UserRole::User),
+            b"verified_user" => Ok(UserRole::VerifiedUser),
             _ => Err("Unrecognized enum variant".into()),
         }
     }
