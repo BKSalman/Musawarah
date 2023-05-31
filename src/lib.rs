@@ -1,4 +1,4 @@
-use std::fs;
+use std::{fmt::Display, fs};
 
 use axum::{extract::FromRef, response::IntoResponse};
 use diesel_async::{pooled_connection::deadpool::Pool, AsyncPgConnection};
@@ -23,6 +23,7 @@ pub mod s3;
 pub mod schema;
 pub mod sessions;
 pub mod users;
+pub mod utils;
 
 #[derive(thiserror::Error, Debug)]
 pub enum ConfigError {
@@ -122,6 +123,22 @@ pub struct ErrorResponse {
     pub details: Option<Vec<String>>,
 }
 
+impl ErrorResponse {
+    pub fn new(error_message: impl Display) -> Self {
+        Self {
+            error: error_message.to_string(),
+            ..Default::default()
+        }
+    }
+
+    pub fn with_details(error_message: impl Display, details: Vec<impl Display>) -> Self {
+        Self {
+            error: error_message.to_string(),
+            details: Some(details.iter().map(|s| s.to_string()).collect()),
+        }
+    }
+}
+
 impl IntoResponse for ErrorResponse {
     fn into_response(self) -> axum::response::Response {
         serde_json::to_string(&self)
@@ -139,4 +156,8 @@ impl Modify for SecurityAddon {
             components.add_security_scheme("auth", SecurityScheme::Http(http_auth_scheme))
         }
     }
+}
+
+pub trait Rating {
+    fn rating(&self) -> f64;
 }

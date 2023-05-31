@@ -16,13 +16,15 @@ use crate::{
     auth::AuthExtractor,
     chapters::models::{Chapter, ChapterResponseBrief},
     comic_genres::models::{ComicGenre, Genre, GenreMapping},
-    schema::{comic_genres, comic_genres_mapping, comics, users},
+    comics::models::NewComicRating,
+    schema::{comic_genres, comic_genres_mapping, comic_ratings, comics, users},
     users::models::{User, UserResponseBrief, UserRole},
+    utils::average_rating,
     AppState, PaginationParams,
 };
 
 use super::{
-    models::{Comic, ComicResponse, CreateComic, UpdateComic},
+    models::{Comic, ComicRating, ComicResponse, CreateComic, UpdateComic},
     ComicsError, ComicsParams,
 };
 
@@ -33,6 +35,7 @@ pub fn comics_router() -> Router<AppState> {
         .route("/:comic_id", put(update_comic))
         .route("/:comic_id", delete(delete_comic))
         .route("/:comic_id", get(get_comic))
+        .route("/rate/:comic_id", post(rate_comic))
 }
 
 /// Create Comic
@@ -68,7 +71,6 @@ pub async fn create_comic(
                     description: payload.description,
                     is_visible: payload.is_visible,
                     published_at: None,
-                    rating: None,
                     poster_path: None,
                     poster_content_type: None,
                     created_at: Utc::now(),
@@ -86,6 +88,7 @@ pub async fn create_comic(
                     author: auth.current_user,
                     title: comic.title.to_string(),
                     description: comic.description.clone(),
+                    rating: 0.0,
                     created_at: comic.created_at.to_string(),
                     chapters: vec![],
                     genres: vec![],
@@ -168,6 +171,11 @@ pub async fn get_comic(
         .load(&mut db)
         .await?;
 
+    let comic_ratings = ComicRating::belonging_to(&comic)
+        .select(ComicRating::as_select())
+        .load(&mut db)
+        .await?;
+
     let comic = ComicResponse {
         id: comic.id,
         author: UserResponseBrief {
@@ -179,6 +187,7 @@ pub async fn get_comic(
         },
         title: comic.title,
         description: comic.description,
+        rating: average_rating(comic_ratings),
         created_at: comic.created_at.to_string(),
         chapters: chapters
             .into_iter()
@@ -256,14 +265,22 @@ pub async fn get_comics(
 
     let genres = genres.grouped_by(&comics);
 
+    let comics_ratings: Vec<ComicRating> = ComicRating::belonging_to(&comics)
+        .select(ComicRating::as_select())
+        .load::<ComicRating>(&mut db)
+        .await?;
+
+    let comics_ratings: Vec<Vec<ComicRating>> = comics_ratings.grouped_by(&comics);
+
     let comics: Result<Vec<ComicResponse>, ComicsError> =
-        multizip((users, comics, genres, chapters))
-            .map(|(user, comic, genres, chapters)| {
+        multizip((users, comics, genres, chapters, comics_ratings))
+            .map(|(user, comic, genres, chapters, comic_ratings)| {
                 Ok(ComicResponse {
                     id: comic.id,
                     title: comic.title,
                     description: comic.description,
                     created_at: comic.created_at.to_string(),
+                    rating: average_rating(comic_ratings),
                     author: UserResponseBrief {
                         id: user.id,
                         displayname: user.displayname,
@@ -363,4 +380,57 @@ pub async fn delete_comic(
     .await?;
 
     Ok(Json(deleted_comic.id))
+}
+
+/// Rate comic
+#[utoipa::path(
+    get,
+    path = "/api/v1/comics/rate/{comic_id}",
+    responses(),
+    security(
+        ("auth" = [])
+    ),
+    tag = "Comics API"
+)]
+#[axum::debug_handler(state = AppState)]
+pub async fn rate_comic(
+    auth: AuthExtractor<{ UserRole::VerifiedUser as u32 }>,
+    State(pool): State<Pool<AsyncPgConnection>>,
+    Path(comic_id): Path<Uuid>,
+    Json(payload): Json<NewComicRating>,
+) -> Result<(), ComicsError> {
+    let mut db = pool.get().await?;
+
+    match diesel::update(
+        comic_ratings::table
+            .filter(comic_ratings::user_id.eq(auth.current_user.id))
+            .filter(comic_ratings::comic_id.eq(comic_id)),
+    )
+    .set((
+        comic_ratings::updated_at.eq(Some(Utc::now())),
+        comic_ratings::rating.eq(payload.rating),
+    ))
+    .execute(&mut db)
+    .await
+    {
+        Err(diesel::result::Error::NotFound) => {
+            let comic_rating = ComicRating {
+                id: Uuid::now_v7(),
+                rating: payload.rating,
+                created_at: Utc::now(),
+                updated_at: None,
+                user_id: auth.current_user.id,
+                comic_id,
+            };
+
+            diesel::insert_into(comic_ratings::table)
+                .values(comic_rating)
+                .execute(&mut db)
+                .await?;
+
+            Ok(())
+        }
+        Err(e) => Err(e.into()),
+        Ok(_) => Ok(()),
+    }
 }

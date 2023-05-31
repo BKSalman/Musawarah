@@ -14,6 +14,7 @@ use diesel_async::{
     AsyncPgConnection, RunQueryDsl,
 };
 use futures::TryStreamExt;
+use itertools::multizip;
 use serde_json::json;
 use tempfile::tempfile;
 use tokio::{
@@ -25,11 +26,12 @@ use tower_http::limit::RequestBodyLimitLayer;
 
 use crate::{
     auth::AuthExtractor,
-    chapters::models::ChapterPage,
+    chapters::models::{ChapterPage, ChapterRating, NewChapterRating},
     common::models::ImageResponse,
     s3::{interface::Storage, Upload},
-    schema::{chapter_pages, comic_chapters},
+    schema::{chapter_pages, chapter_ratings, comic_chapters},
     users::models::UserRole,
+    utils::average_rating,
     AppState, PaginationParams,
 };
 
@@ -55,6 +57,7 @@ pub fn chapters_router() -> Router<AppState> {
         .route("/page", post(create_chapter_page))
         .route("/:comic_id", get(get_chapters))
         .route("/s/:chapter_id", get(get_chapter))
+        .route("/rate/:chapter_id", post(rate_chapter))
 }
 
 /// Create a chapter
@@ -63,7 +66,7 @@ pub fn chapters_router() -> Router<AppState> {
     path = "/api/v1/chapters",
     request_body(content = CreateChapter, content_type = "application/json"),
     responses(
-        (status = 200, description = "Comic successfully created", body = UserResponse),
+        (status = 200, description = "Chapter successfully created", body = UserResponse),
         (status = StatusCode::CONFLICT, description = "Chapter number conflicts with an already existing one", body = ErrorHandlingResponse),
         (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
     ),
@@ -85,7 +88,6 @@ pub async fn create_chapter(
         description: payload.description,
         created_at: Utc::now(),
         updated_at: None,
-        rating: None,
         published_at: None,
         is_visible: false,
     };
@@ -309,7 +311,7 @@ pub async fn create_chapter_page(
         PaginationParams
     ),
     responses(
-        (status = 200, description = "Get chapters of specified comic", body = [ChapterResponse]),
+        (status = 200, body = [ChapterResponse]),
         (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
     ),
     tag = "Chapters API"
@@ -337,16 +339,21 @@ pub async fn get_chapters(
         .load::<ChapterPage>(&mut db)
         .await?;
 
-    let chapter_pages = chapter_pages.grouped_by(&chapters);
+    let chapters_ratings = ChapterRating::belonging_to(&chapters)
+        .select(ChapterRating::as_select())
+        .load::<ChapterRating>(&mut db)
+        .await?;
 
-    let chapters = chapters
-        .into_iter()
-        .zip(chapter_pages.into_iter())
-        .map(|(chapter, pages)| ChapterResponse {
+    let chapter_pages = chapter_pages.grouped_by(&chapters);
+    let chapters_ratings = chapters_ratings.grouped_by(&chapters);
+
+    let chapters = multizip((chapters, chapter_pages, chapters_ratings))
+        .map(|(chapter, pages, chapter_ratings)| ChapterResponse {
             id: chapter.id,
             title: chapter.title,
             number: chapter.number,
             description: chapter.description,
+            rating: average_rating(chapter_ratings),
             created_at: chapter.created_at,
             pages: pages
                 .into_iter()
@@ -406,11 +413,16 @@ pub async fn get_chapter(
         })
         .collect();
 
+    let chapter_ratings = ChapterRating::belonging_to(&chapter)
+        .load::<ChapterRating>(&mut db)
+        .await?;
+
     let chapter = ChapterResponse {
         id: chapter.id,
         title: chapter.title,
         number: chapter.number,
         description: chapter.description,
+        rating: average_rating(chapter_ratings),
         pages: chapter_pages,
         created_at: chapter.created_at,
     };
@@ -422,9 +434,9 @@ pub async fn get_chapter(
 #[utoipa::path(
     put,
     path = "/api/v1/chapters/{chapter_id}",
-    request_body(content = UpdateComic, content_type = "application/json"),
+    request_body(content = UpdateChapter, content_type = "application/json"),
     responses(
-        (status = 200, description = "Specified comic has been successfully updated", body = Uuid),
+        (status = 200, body = Uuid),
         (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
     ),
     tag = "Chapters API"
@@ -459,7 +471,7 @@ pub async fn update_chapter(
     delete,
     path = "/api/v1/chapters/{chapter_id}",
     responses(
-        (status = 200, description = "Specified comic has been successfully deleted"),
+        (status = 200, description = "Specified chapter has been successfully deleted"),
         (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
     ),
     tag = "Chapters API"
@@ -471,8 +483,6 @@ pub async fn delete_chapter(
     Path(chapter_id): Path<Uuid>,
 ) -> Result<Json<serde_json::Value>, ChaptersError> {
     let mut db = pool.get().await?;
-
-    // TODO: check if user is the author of the chapter
 
     let _res = diesel::delete(
         comic_chapters::table
@@ -514,4 +524,57 @@ pub async fn delete_chapter_page(
     Ok(Json(json!({
         "message": format!("deleted chapter page: {}", res.id)
     })))
+}
+
+/// Rate chapter
+#[utoipa::path(
+    get,
+    path = "/api/v1/chapters/rate/{chapter_id}",
+    responses(),
+    security(
+        ("auth" = [])
+    ),
+    tag = "Chapters API"
+)]
+#[axum::debug_handler(state = AppState)]
+pub async fn rate_chapter(
+    auth: AuthExtractor<{ UserRole::VerifiedUser as u32 }>,
+    State(pool): State<Pool<AsyncPgConnection>>,
+    Path(chapter_id): Path<Uuid>,
+    Json(payload): Json<NewChapterRating>,
+) -> Result<(), ChaptersError> {
+    let mut db = pool.get().await?;
+
+    match diesel::update(
+        chapter_ratings::table
+            .filter(chapter_ratings::user_id.eq(auth.current_user.id))
+            .filter(chapter_ratings::chapter_id.eq(chapter_id)),
+    )
+    .set((
+        chapter_ratings::updated_at.eq(Some(Utc::now())),
+        chapter_ratings::rating.eq(payload.rating),
+    ))
+    .execute(&mut db)
+    .await
+    {
+        Err(diesel::result::Error::NotFound) => {
+            let chapter_rating = ChapterRating {
+                id: Uuid::now_v7(),
+                rating: payload.rating,
+                created_at: Utc::now(),
+                updated_at: None,
+                user_id: auth.current_user.id,
+                chapter_id,
+            };
+
+            diesel::insert_into(chapter_ratings::table)
+                .values(chapter_rating)
+                .execute(&mut db)
+                .await?;
+
+            Ok(())
+        }
+        Err(e) => Err(e.into()),
+        Ok(_) => Ok(()),
+    }
 }

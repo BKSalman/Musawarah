@@ -11,8 +11,9 @@ use uuid::Uuid;
 use crate::{
     comics::models::Comic,
     common::models::ImageResponse,
-    schema::{chapter_pages, comic_chapters},
+    schema::{chapter_pages, chapter_ratings, comic_chapters},
     users::models::User,
+    Rating,
 };
 
 #[derive(Insertable, Queryable, Selectable, Identifiable, Associations, Debug, PartialEq)]
@@ -28,7 +29,6 @@ pub struct Chapter {
     pub updated_at: Option<DateTime<chrono::Utc>>,
     pub published_at: Option<DateTime<chrono::Utc>>,
     pub is_visible: bool,
-    pub rating: Option<f64>,
     pub user_id: Uuid,
     pub comic_id: Uuid,
 }
@@ -48,6 +48,25 @@ pub struct ChapterPage {
     pub user_id: Uuid,
     pub created_at: DateTime<chrono::Utc>,
     pub updated_at: Option<DateTime<chrono::Utc>>,
+}
+
+#[derive(Insertable, Queryable, Selectable, Identifiable, Associations, Debug, PartialEq)]
+#[diesel(belongs_to(User))]
+#[diesel(belongs_to(Chapter))]
+#[diesel(table_name = chapter_ratings)]
+pub struct ChapterRating {
+    pub id: Uuid,
+    pub rating: f64,
+    pub created_at: DateTime<chrono::Utc>,
+    pub updated_at: Option<DateTime<chrono::Utc>>,
+    pub user_id: Uuid,
+    pub chapter_id: Uuid,
+}
+
+impl Rating for ChapterRating {
+    fn rating(&self) -> f64 {
+        self.rating
+    }
 }
 
 #[derive(Deserialize, ToSchema, Debug)]
@@ -71,6 +90,7 @@ pub struct UpdateChapter {
 pub struct ChapterResponse {
     pub id: Uuid,
     pub title: Option<String>,
+    pub rating: f64,
     pub number: i32,
     pub description: Option<String>,
     pub pages: Vec<ChapterPageResponse>,
@@ -119,4 +139,10 @@ pub struct ChapterPageResponse {
     pub id: Uuid,
     pub number: i32,
     pub image: ImageResponse,
+}
+
+#[derive(Serialize, Deserialize, ToSchema, TS, Debug)]
+#[ts(export)]
+pub struct NewChapterRating {
+    pub rating: f64,
 }

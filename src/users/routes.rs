@@ -24,7 +24,7 @@ use crate::{
     auth::AuthExtractor,
     chapters::models::{Chapter, ChapterResponseBrief},
     comic_genres::models::{ComicGenre, Genre, GenreMapping},
-    comics::models::{Comic, ComicResponse},
+    comics::models::{Comic, ComicRating, ComicResponse},
     common::models::ImageResponse,
     schema::comics,
     schema::{comic_genres, profile_images, sessions, users},
@@ -33,6 +33,7 @@ use crate::{
         SESSION_COOKIE_NAME,
     },
     users::models::User,
+    utils::average_rating,
     AppState, PaginationParams, COOKIES_SECRET,
 };
 
@@ -375,40 +376,49 @@ pub async fn get_user_comics(
 
     let genres = genres.grouped_by(&comics);
 
-    let comics: Result<Vec<ComicResponse>, UsersError> = multizip((comics, genres, chapters))
-        .map(move |(comic, genres, chapters)| {
-            Ok(ComicResponse {
-                id: comic.id,
-                author: UserResponseBrief {
-                    id: user.id,
-                    displayname: user.displayname.clone(),
-                    username: user.username.clone(),
-                    email: user.email.clone(),
-                    role: user.role,
-                },
-                title: comic.title,
-                description: comic.description,
-                created_at: comic.created_at.to_string(),
-                chapters: chapters
-                    .into_iter()
-                    .map(|chapter| ChapterResponseBrief {
-                        id: chapter.id,
-                        title: chapter.title,
-                        description: chapter.description,
-                        number: chapter.number,
-                        created_at: chapter.created_at,
-                    })
-                    .collect(),
-                genres: genres
-                    .into_iter()
-                    .map(|(_genre_mapping, genre)| ComicGenre {
-                        id: genre.id,
-                        name: genre.name,
-                    })
-                    .collect(),
+    let comics_ratings: Vec<ComicRating> = ComicRating::belonging_to(&comics)
+        .select(ComicRating::as_select())
+        .load::<ComicRating>(&mut db)
+        .await?;
+
+    let comics_ratings: Vec<Vec<ComicRating>> = comics_ratings.grouped_by(&comics);
+
+    let comics: Result<Vec<ComicResponse>, UsersError> =
+        multizip((comics, genres, chapters, comics_ratings))
+            .map(move |(comic, genres, chapters, comic_ratings)| {
+                Ok(ComicResponse {
+                    id: comic.id,
+                    author: UserResponseBrief {
+                        id: user.id,
+                        displayname: user.displayname.clone(),
+                        username: user.username.clone(),
+                        email: user.email.clone(),
+                        role: user.role,
+                    },
+                    title: comic.title,
+                    description: comic.description,
+                    rating: average_rating(comic_ratings),
+                    created_at: comic.created_at.to_string(),
+                    chapters: chapters
+                        .into_iter()
+                        .map(|chapter| ChapterResponseBrief {
+                            id: chapter.id,
+                            title: chapter.title,
+                            description: chapter.description,
+                            number: chapter.number,
+                            created_at: chapter.created_at,
+                        })
+                        .collect(),
+                    genres: genres
+                        .into_iter()
+                        .map(|(_genre_mapping, genre)| ComicGenre {
+                            id: genre.id,
+                            name: genre.name,
+                        })
+                        .collect(),
+                })
             })
-        })
-        .collect();
+            .collect();
 
     Ok(Json(comics?))
 }
