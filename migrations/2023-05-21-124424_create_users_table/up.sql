@@ -1,7 +1,7 @@
 -- Your SQL goes here
 
 CREATE TYPE UserRole AS ENUM (
-    'admin', 'staff', 'user'
+    'admin', 'staff', 'user', 'verified_user'
 );
 
 CREATE TABLE IF NOT EXISTS users (

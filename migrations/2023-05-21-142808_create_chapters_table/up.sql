@@ -8,7 +8,6 @@ CREATE TABLE IF NOT EXISTS comic_chapters (
     updated_at TIMESTAMPTZ,
     published_at TIMESTAMPTZ,
     is_visible BOOLEAN NOT NULL,
-    rating FLOAT,
     user_id UUID NOT NULL,
     comic_id UUID NOT NULL,
 
