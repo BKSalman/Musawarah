@@ -14,6 +14,7 @@ use diesel_async::{
     AsyncPgConnection, RunQueryDsl,
 };
 use futures::TryStreamExt;
+use garde::Validate;
 use itertools::multizip;
 use serde_json::json;
 use tempfile::tempfile;
@@ -26,13 +27,16 @@ use tower_http::limit::RequestBodyLimitLayer;
 
 use crate::{
     auth::AuthExtractor,
-    chapters::models::{ChapterPage, ChapterRating, NewChapterRating},
+    comics::chapters::{
+        models::{ChapterPage, ChapterRating, NewChapterRating},
+        ChaptersParams,
+    },
     common::models::ImageResponse,
     s3::{interface::Storage, Upload},
     schema::{chapter_pages, chapter_ratings, comic_chapters},
     users::models::UserRole,
     utils::average_rating,
-    AppState, PaginationParams,
+    AppState, SortingOrder,
 };
 
 use super::{
@@ -56,14 +60,14 @@ pub fn chapters_router() -> Router<AppState> {
         .route("/", post(create_chapter))
         .route("/page", post(create_chapter_page))
         .route("/:comic_id", get(get_chapters))
-        .route("/s/:chapter_id", get(get_chapter))
-        .route("/rate/:chapter_id", post(rate_chapter))
+        .route("/:chapter_id/s", get(get_chapter))
+        .route("/:chapter_id/rate", post(rate_chapter))
 }
 
 /// Create a chapter
 #[utoipa::path(
     post,
-    path = "/api/v1/chapters",
+    path = "/api/v1/comics/:comic_id/chapters",
     request_body(content = CreateChapter, content_type = "application/json"),
     responses(
         (status = 200, description = "Chapter successfully created", body = UserResponse),
@@ -75,6 +79,7 @@ pub fn chapters_router() -> Router<AppState> {
 pub async fn create_chapter(
     auth: AuthExtractor<{ UserRole::User as u32 }>,
     State(pool): State<Pool<AsyncPgConnection>>,
+    Path(comic_id): Path<Uuid>,
     Json(payload): Json<CreateChapter>,
 ) -> Result<Json<ChapterResponseBrief>, ChaptersError> {
     let mut db = pool.get().await?;
@@ -82,7 +87,7 @@ pub async fn create_chapter(
     let chapter = Chapter {
         id: Uuid::now_v7(),
         user_id: auth.current_user.id,
-        comic_id: payload.comic_id,
+        comic_id: comic_id,
         number: payload.number,
         title: payload.title,
         description: payload.description,
@@ -110,7 +115,7 @@ pub async fn create_chapter(
 /// Create a chapter page
 #[utoipa::path(
     post,
-    path = "/api/v1/chapters/page",
+    path = "/api/v1/comics/chapters/page",
     request_body(content = CreateChapterPage, content_type = "multipart/form-data"),
     responses(
         (status = 200, description = "Chapter page successfully created", body = ChapterResponse),
@@ -303,79 +308,10 @@ pub async fn create_chapter_page(
     Ok(Json(chapter_page))
 }
 
-/// Get chapters of a comic with pagination
-#[utoipa::path(
-    get,
-    path = "/api/v1/chapters",
-        params(
-        PaginationParams
-    ),
-    responses(
-        (status = 200, body = [ChapterResponse]),
-        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
-    ),
-    tag = "Chapters API"
-)]
-#[axum::debug_handler(state = AppState)]
-pub async fn get_chapters(
-    _auth: AuthExtractor<{ UserRole::User as u32 }>,
-    State(pool): State<Pool<AsyncPgConnection>>,
-    Query(pagination): Query<PaginationParams>,
-    Path(comic_id): Path<Uuid>,
-) -> Result<Json<Vec<ChapterResponse>>, ChaptersError> {
-    let mut db = pool.get().await?;
-
-    let chapters = comic_chapters::table
-        .filter(comic_chapters::comic_id.eq(comic_id))
-        .filter(comic_chapters::id.gt(pagination.min_id))
-        .filter(comic_chapters::id.lt(pagination.max_id))
-        .limit(10)
-        .select(Chapter::as_select())
-        .load::<Chapter>(&mut db)
-        .await?;
-
-    let chapter_pages = ChapterPage::belonging_to(&chapters)
-        .select(ChapterPage::as_select())
-        .load::<ChapterPage>(&mut db)
-        .await?;
-
-    let chapters_ratings = ChapterRating::belonging_to(&chapters)
-        .select(ChapterRating::as_select())
-        .load::<ChapterRating>(&mut db)
-        .await?;
-
-    let chapter_pages = chapter_pages.grouped_by(&chapters);
-    let chapters_ratings = chapters_ratings.grouped_by(&chapters);
-
-    let chapters = multizip((chapters, chapter_pages, chapters_ratings))
-        .map(|(chapter, pages, chapter_ratings)| ChapterResponse {
-            id: chapter.id,
-            title: chapter.title,
-            number: chapter.number,
-            description: chapter.description,
-            rating: average_rating(chapter_ratings),
-            created_at: chapter.created_at,
-            pages: pages
-                .into_iter()
-                .map(|page| ChapterPageResponse {
-                    id: page.id,
-                    number: page.number,
-                    image: ImageResponse {
-                        content_type: page.content_type,
-                        path: page.path,
-                    },
-                })
-                .collect(),
-        })
-        .collect();
-
-    Ok(Json(chapters))
-}
-
 /// Get chapter of a comic
 #[utoipa::path(
     get,
-    path = "/api/v1/chapters/s/{chapter_id}",
+    path = "/api/v1/comics/chapters/s/:chapter_id",
     responses(
         (status = 200, description = "Get chapter", body = ChapterResponse),
         (status = StatusCode::NOT_FOUND, description = "Specified chapter not found", body = ErrorHandlingResponse),
@@ -433,7 +369,7 @@ pub async fn get_chapter(
 /// Update chapter
 #[utoipa::path(
     put,
-    path = "/api/v1/chapters/{chapter_id}",
+    path = "/api/v1/comics/chapters/:chapter_id",
     request_body(content = UpdateChapter, content_type = "application/json"),
     responses(
         (status = 200, body = Uuid),
@@ -469,7 +405,7 @@ pub async fn update_chapter(
 /// Delete chapter
 #[utoipa::path(
     delete,
-    path = "/api/v1/chapters/{chapter_id}",
+    path = "/api/v1/comics/chapters/:chapter_id",
     responses(
         (status = 200, description = "Specified chapter has been successfully deleted"),
         (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
@@ -497,7 +433,7 @@ pub async fn delete_chapter(
 /// Delete chapter page
 #[utoipa::path(
     delete,
-    path = "/api/v1/chapters/page/{chapter_page_id}",
+    path = "/api/v1/comics/chapters/page/:chapter_page_id",
     responses(
         (status = 200, description = "Specified chapter page has been successfully deleted"),
         (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
@@ -529,7 +465,8 @@ pub async fn delete_chapter_page(
 /// Rate chapter
 #[utoipa::path(
     get,
-    path = "/api/v1/chapters/rate/{chapter_id}",
+    path = "/api/v1/comics/:comic_id/chapters/:chapter_id/rate",
+    request_body(content = NewChapterRating, description = "Validation:\n- rating: 0-10", content_type = "application/json"),
     responses(),
     security(
         ("auth" = [])
@@ -543,6 +480,8 @@ pub async fn rate_chapter(
     Path(chapter_id): Path<Uuid>,
     Json(payload): Json<NewChapterRating>,
 ) -> Result<(), ChaptersError> {
+    payload.validate(&())?;
+
     let mut db = pool.get().await?;
 
     match diesel::update(
@@ -552,15 +491,15 @@ pub async fn rate_chapter(
     )
     .set((
         chapter_ratings::updated_at.eq(Some(Utc::now())),
-        chapter_ratings::rating.eq(payload.rating),
+        chapter_ratings::rating.eq(payload.rating as f64),
     ))
-    .execute(&mut db)
+    .get_result::<ChapterRating>(&mut db)
     .await
     {
         Err(diesel::result::Error::NotFound) => {
             let chapter_rating = ChapterRating {
                 id: Uuid::now_v7(),
-                rating: payload.rating,
+                rating: payload.rating as f64,
                 created_at: Utc::now(),
                 updated_at: None,
                 user_id: auth.current_user.id,
@@ -577,4 +516,88 @@ pub async fn rate_chapter(
         Err(e) => Err(e.into()),
         Ok(_) => Ok(()),
     }
+}
+
+/// Get chapters of a comic with pagination
+#[utoipa::path(
+    get,
+    path = "/api/v1/comics/:comic_id/chapters",
+        params(
+        ChaptersParams
+    ),
+    responses(
+        (status = 200, body = [ChapterResponse]),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
+    ),
+    tag = "Chapters API"
+)]
+#[axum::debug_handler(state = AppState)]
+pub async fn get_chapters(
+    _auth: AuthExtractor<{ UserRole::User as u32 }>,
+    State(pool): State<Pool<AsyncPgConnection>>,
+    Query(params): Query<ChaptersParams>,
+    Path(comic_id): Path<Uuid>,
+) -> Result<Json<Vec<ChapterResponse>>, ChaptersError> {
+    let mut db = pool.get().await?;
+
+    let mut chapters_query = comic_chapters::table
+        .left_join(chapter_ratings::table)
+        .filter(comic_chapters::comic_id.eq(comic_id))
+        .filter(comic_chapters::id.gt(params.min_id))
+        .filter(comic_chapters::id.lt(params.max_id))
+        .into_boxed();
+
+    if let Some(sorting_order) = params.sorting {
+        match sorting_order {
+            SortingOrder::Descending => {
+                chapters_query = chapters_query.order(chapter_ratings::rating.desc())
+            }
+            SortingOrder::Ascending => {
+                chapters_query = chapters_query.order(chapter_ratings::rating.asc())
+            }
+        }
+    }
+
+    let chapters = chapters_query
+        .limit(10)
+        .select(Chapter::as_select())
+        .load::<Chapter>(&mut db)
+        .await?;
+
+    let chapter_pages = ChapterPage::belonging_to(&chapters)
+        .select(ChapterPage::as_select())
+        .load::<ChapterPage>(&mut db)
+        .await?;
+
+    let chapters_ratings = ChapterRating::belonging_to(&chapters)
+        .select(ChapterRating::as_select())
+        .load::<ChapterRating>(&mut db)
+        .await?;
+
+    let chapter_pages = chapter_pages.grouped_by(&chapters);
+    let chapters_ratings = chapters_ratings.grouped_by(&chapters);
+
+    let chapters = multizip((chapters, chapter_pages, chapters_ratings))
+        .map(|(chapter, pages, chapter_ratings)| ChapterResponse {
+            id: chapter.id,
+            title: chapter.title,
+            number: chapter.number,
+            description: chapter.description,
+            rating: average_rating(chapter_ratings),
+            created_at: chapter.created_at,
+            pages: pages
+                .into_iter()
+                .map(|page| ChapterPageResponse {
+                    id: page.id,
+                    number: page.number,
+                    image: ImageResponse {
+                        content_type: page.content_type,
+                        path: page.path,
+                    },
+                })
+                .collect(),
+        })
+        .collect();
+
+    Ok(Json(chapters))
 }

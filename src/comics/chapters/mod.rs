@@ -4,8 +4,22 @@ mod utils;
 
 use axum::{http::StatusCode, response::IntoResponse, Json};
 use diesel::result::{DatabaseErrorKind, Error::DatabaseError};
-use diesel_async::pooled_connection::deadpool::PoolError;
+use serde::Deserialize;
+use utoipa::IntoParams;
+use uuid::Uuid;
+
+use crate::{ErrorResponse, SortingOrder};
 // use tracing::debug;
+
+#[derive(Debug, Deserialize, IntoParams)]
+pub struct ChaptersParams {
+    #[serde(default = "Uuid::nil")]
+    pub min_id: Uuid,
+    #[serde(default = "Uuid::max")]
+    pub max_id: Uuid,
+    #[serde(default)]
+    pub sorting: Option<SortingOrder>,
+}
 
 #[derive(thiserror::Error, Debug)]
 pub enum ChaptersError {
@@ -25,10 +39,11 @@ pub enum ChaptersError {
     Diesel(#[from] diesel::result::Error),
 
     #[error(transparent)]
-    PoolError(#[from] PoolError),
+    PoolError(#[from] diesel_async::pooled_connection::deadpool::PoolError),
 
-    // #[error("validation error: {0}")]
-    // Validator(#[from] validator::ValidationErrors),
+    #[error(transparent)]
+    Validator(#[from] garde::Errors),
+
     #[error("{0}")]
     Conflict(String),
 }
@@ -84,6 +99,20 @@ impl IntoResponse for ChaptersError {
                 (StatusCode::INTERNAL_SERVER_ERROR).into_response()
             }
             ChaptersError::PoolError(_) => (StatusCode::INTERNAL_SERVER_ERROR).into_response(),
+            ChaptersError::Validator(errors) => (
+                StatusCode::BAD_REQUEST,
+                ErrorResponse {
+                    error: String::from("invalid input"),
+                    details: Some(
+                        errors
+                            .flatten()
+                            .iter()
+                            .map(|(path, error)| format!("{path}: {error}"))
+                            .collect::<Vec<String>>(),
+                    ),
+                },
+            )
+                .into_response(),
         }
     }
 }

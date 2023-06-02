@@ -1,5 +1,5 @@
 use crate::{
-    auth::AuthExtractor, comic_genres::models::ComicGenre, schema::comic_genres,
+    auth::AuthExtractor, comics::comic_genres::models::ComicGenre, schema::comic_genres,
     users::models::UserRole, AppState,
 };
 use chrono::Utc;
@@ -20,15 +20,15 @@ use diesel_async::{pooled_connection::deadpool::Pool, AsyncPgConnection, RunQuer
 
 pub fn comic_genres_router() -> Router<AppState> {
     Router::new()
-        .route("/", get(get_genres))
-        .route("/", post(create_genre))
-        .route("/:genre_id", put(update_genre))
-        .route("/:genre_id", delete(delete_genre))
+        .route("/genres", get(get_genres))
+        .route("/genres", post(create_genre))
+        .route("/genres/:genre_id", put(update_genre))
+        .route("/genres/:genre_id", delete(delete_genre))
 }
 
 #[utoipa::path(
     get,
-    path = "/api/v1/comic-genres",
+    path = "/api/v1/comics/genres",
     responses(
         (status = StatusCode::OK, body = [ComicGenre]),
         (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
@@ -60,7 +60,7 @@ pub async fn get_genres(
 
 #[utoipa::path(
     post,
-    path = "/api/v1/comic-genres",
+    path = "/api/v1/comics/genres",
     responses(
         (status = StatusCode::OK),
         (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
@@ -88,7 +88,7 @@ pub async fn create_genre(
 
 #[utoipa::path(
     put,
-    path = "/api/v1/comic-genres/:genre_id",
+    path = "/api/v1/comics/genres/:genre_id",
     responses(
         (status = StatusCode::OK),
         (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
@@ -114,7 +114,7 @@ pub async fn update_genre(
 
 #[utoipa::path(
     delete,
-    path = "/api/v1/comic-genres/:genre_id",
+    path = "/api/v1/comics/genres/:genre_id",
     responses(
         (status = StatusCode::OK),
         (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),

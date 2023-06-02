@@ -1,4 +1,6 @@
-use axum::{http::StatusCode, response::IntoResponse, Json};
+use axum::{http::StatusCode, response::IntoResponse};
+
+use crate::ErrorResponse;
 
 pub mod models;
 pub mod routes;
@@ -44,19 +46,69 @@ impl IntoResponse for UsersError {
         tracing::error!("{:#?}", self);
 
         match self {
-            UsersError::UserNotFound => (StatusCode::NOT_FOUND, self.to_string()).into_response(),
-            UsersError::HasNoPosts => (StatusCode::NOT_FOUND, "user has no posts").into_response(),
-            UsersError::BadRequest => (StatusCode::BAD_REQUEST, self.to_string()).into_response(),
-            UsersError::Conflict(_) => (StatusCode::CONFLICT, self.to_string()).into_response(),
-            UsersError::InvalidCredentials => {
-                (StatusCode::UNAUTHORIZED, self.to_string()).into_response()
+            UsersError::UserNotFound => (
+                StatusCode::NOT_FOUND,
+                ErrorResponse {
+                    error: self.to_string(),
+                    ..Default::default()
+                },
+            )
+                .into_response(),
+            UsersError::HasNoPosts => (
+                StatusCode::NOT_FOUND,
+                ErrorResponse {
+                    error: self.to_string(),
+                    ..Default::default()
+                },
+            )
+                .into_response(),
+            UsersError::BadRequest => (
+                StatusCode::BAD_REQUEST,
+                ErrorResponse {
+                    error: self.to_string(),
+                    ..Default::default()
+                },
+            )
+                .into_response(),
+            UsersError::Conflict(_) => (
+                StatusCode::CONFLICT,
+                ErrorResponse {
+                    error: self.to_string(),
+                    ..Default::default()
+                },
+            )
+                .into_response(),
+            UsersError::InvalidCredentials => (
+                StatusCode::UNAUTHORIZED,
+                ErrorResponse {
+                    error: self.to_string(),
+                    ..Default::default()
+                },
+            )
+                .into_response(),
+            UsersError::Diesel(err) => {
+                if let diesel::result::Error::NotFound = err {
+                    return (
+                        StatusCode::NOT_FOUND,
+                        ErrorResponse {
+                            error: String::from("user not found"),
+                            ..Default::default()
+                        },
+                    )
+                        .into_response();
+                }
+                (StatusCode::INTERNAL_SERVER_ERROR).into_response()
             }
-            UsersError::Diesel(_) => (StatusCode::INTERNAL_SERVER_ERROR).into_response(),
             UsersError::InternalServerError => (StatusCode::INTERNAL_SERVER_ERROR).into_response(),
             UsersError::Argon2(_) => (StatusCode::INTERNAL_SERVER_ERROR).into_response(),
-            UsersError::AlreadyLoggedIn => {
-                (StatusCode::BAD_REQUEST, self.to_string()).into_response()
-            }
+            UsersError::AlreadyLoggedIn => (
+                StatusCode::BAD_REQUEST,
+                ErrorResponse {
+                    error: self.to_string(),
+                    ..Default::default()
+                },
+            )
+                .into_response(),
             UsersError::Validator(errors) => {
                 let errors = errors
                     .flatten()
@@ -64,7 +116,14 @@ impl IntoResponse for UsersError {
                     .map(|(path, error)| format!("{path}: {error}"))
                     .collect::<Vec<String>>();
 
-                (StatusCode::BAD_REQUEST, Json(errors)).into_response()
+                (
+                    StatusCode::BAD_REQUEST,
+                    ErrorResponse {
+                        error: String::from("invalid input"),
+                        details: Some(errors),
+                    },
+                )
+                    .into_response()
             }
             UsersError::PoolError(_) => (StatusCode::INTERNAL_SERVER_ERROR).into_response(),
         }

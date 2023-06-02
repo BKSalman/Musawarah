@@ -21,6 +21,7 @@ use crate::{
 #[derive(Deserialize, Serialize, Debug, AsExpression, FromSqlRow, TS, Copy, Clone)]
 #[diesel(sql_type = crate::schema::sql_types::Userrole)]
 #[repr(u32)]
+#[serde(rename_all = "snake_case")]
 pub enum UserRole {
     Admin,
     Staff,

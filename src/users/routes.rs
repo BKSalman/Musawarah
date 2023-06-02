@@ -22,9 +22,12 @@ use uuid::Uuid;
 
 use crate::{
     auth::AuthExtractor,
-    chapters::models::{Chapter, ChapterResponseBrief},
-    comic_genres::models::{ComicGenre, Genre, GenreMapping},
-    comics::models::{Comic, ComicRating, ComicResponse},
+    comics::chapters::models::{Chapter, ChapterResponseBrief},
+    comics::comic_genres::models::{ComicGenre, Genre, GenreMapping},
+    comics::{
+        models::{Comic, ComicRating, ComicResponse},
+        ComicsParams,
+    },
     common::models::ImageResponse,
     schema::comics,
     schema::{comic_genres, profile_images, sessions, users},
@@ -34,7 +37,7 @@ use crate::{
     },
     users::models::User,
     utils::average_rating,
-    AppState, PaginationParams, COOKIES_SECRET,
+    AppState, COOKIES_SECRET,
 };
 
 use super::{
@@ -57,7 +60,7 @@ pub fn users_router() -> Router<AppState> {
     path = "/api/v1/users",
     request_body(
         content = CreateUser,
-        description = "Validation:\n- username: min = 5, max = 60\n- password: min = 8",
+        description = "Validation:\n- username: 5-60\n- password: 8...",
         content_type = "application/json"),
     responses(
         (status = 200, description = "User successfully created", body = UserResponse),
@@ -93,7 +96,6 @@ pub async fn create_user(
                 let user = User {
                     id: Uuid::now_v7(),
                     first_name: None,
-                    // TODO: why do I need to clone this?
                     last_name: None,
                     username: payload.username.to_lowercase(),
                     displayname: payload.username.clone(),
@@ -178,7 +180,7 @@ pub async fn create_user(
     path = "/api/v1/users/login",
     request_body(
         content = UserLogin,
-        description = "Validation:- password: min = 8",
+        description = "Validation:\n- password: min = 8",
         content_type = "application/json"
     ),
     responses(
@@ -315,9 +317,9 @@ pub async fn logout(
 /// Get user comics by username
 #[utoipa::path(
     get,
-    path = "/api/v1/users/comics/{username}",
+    path = "/api/v1/users/comics/:username",
     params(
-        PaginationParams
+        ComicsParams
     ),
     responses(
         (status = 200, description = "Caller authorized. returned requested user's comics", body = [ComicResponse]),
@@ -333,7 +335,7 @@ pub async fn logout(
 pub async fn get_user_comics(
     State(pool): State<Pool<AsyncPgConnection>>,
     Path(username): Path<String>,
-    Query(pagination): Query<PaginationParams>,
+    Query(params): Query<ComicsParams>,
     _auth: AuthExtractor<{ UserRole::User as u32 }>,
 ) -> Result<Json<Vec<ComicResponse>>, UsersError> {
     tracing::debug!("get {}'s comics", username);
@@ -352,10 +354,9 @@ pub async fn get_user_comics(
             e.into()
         })?;
 
-    // TODO: this can by inner_join'ed
     let comics: Vec<Comic> = Comic::belonging_to(&user)
-        .filter(comics::id.gt(pagination.min_id))
-        .filter(comics::id.lt(pagination.max_id))
+        .filter(comics::id.gt(params.min_id))
+        .filter(comics::id.lt(params.max_id))
         .limit(10)
         .select(Comic::as_select())
         .load::<Comic>(&mut db)
@@ -426,7 +427,7 @@ pub async fn get_user_comics(
 /// Get user by username
 #[utoipa::path(
     get,
-    path = "/api/v1/users/{user_id}",
+    path = "/api/v1/users/:user_id",
     responses(
         (status = 200, description = "Caller authorized. returned current user info", body = UserClaims),
         (status = StatusCode::UNAUTHORIZED, description = "Caller unauthorized", body = ErrorHandlingResponse ),

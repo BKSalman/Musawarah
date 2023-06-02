@@ -102,10 +102,9 @@ pub async fn refresh_session<B>(
     let mut db = pool.get().await?;
 
     if let Some(session_id) = session.session_id {
-        let _session = diesel::update(sessions::table.find(session_id))
+        diesel::update(sessions::table.find(session_id))
             .set(sessions::expires_at.eq(Utc::now() + Duration::days(2)))
-            .returning(Session::as_returning())
-            .get_result::<Session>(&mut db)
+            .execute(&mut db)
             .await?;
     }
 

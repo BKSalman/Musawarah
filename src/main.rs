@@ -11,7 +11,6 @@ use diesel_async::pooled_connection::{deadpool::Pool, AsyncDieselConnectionManag
 use diesel_migrations_async::{embed_migrations, EmbeddedMigrations};
 use dotenvy::dotenv;
 use musawarah::{
-    chapters::routes::chapters_router, comic_genres::routes::comic_genres_router,
     comics::routes::comics_router, migrations::run_migrations, s3::helpers::setup_storage,
     sessions::refresh_session, users::routes::users_router, ApiDoc, AppState, Config, ConfigError,
     COOKIES_SECRET,
@@ -23,22 +22,15 @@ use std::{
 };
 use tower_cookies::{CookieManagerLayer, Key};
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
-use tracing_subscriber::{
-    prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt, EnvFilter,
-};
+use tracing_appender::rolling;
+use tracing_subscriber::{fmt::writer::MakeWriterExt, EnvFilter};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 
 #[tokio::main]
 async fn main() {
-    #[cfg(debug_assertions)]
-    std::env::set_var("RUST_LOG", "debug");
-
-    tracing_subscriber::registry()
-        .with(tracing_subscriber::fmt::layer())
-        .with(EnvFilter::from_default_env())
-        .init();
+    logging();
 
     if let Err(err) = dotenv() {
         tracing::error!("Could not load .env file: {}", err);
@@ -101,13 +93,14 @@ async fn main() {
         ])
         .allow_credentials(true);
 
+    let v1_router = Router::new()
+        .nest("/api/v1/users", users_router())
+        .nest("/api/v1/comics", comics_router());
+
     let app = Router::new()
         .merge(SwaggerUi::new("/swagger-ui").url("/api-doc/openapi.json", ApiDoc::openapi()))
         .route("/", get(root))
-        .nest("/api/v1/users", users_router())
-        .nest("/api/v1/comics", comics_router())
-        .nest("/api/v1/comic-genres", comic_genres_router())
-        .nest("/api/v1/chapters", chapters_router())
+        .merge(v1_router)
         .layer(TraceLayer::new_for_http())
         .layer(cors)
         .layer(middleware::from_fn_with_state(
@@ -119,12 +112,33 @@ async fn main() {
 
     let addr = SocketAddr::from((Ipv4Addr::UNSPECIFIED, 6060));
 
-    tracing::debug!("listening on {}", addr);
+    tracing::info!("listening on {}", addr);
 
     axum::Server::bind(&addr)
         .serve(app.into_make_service())
         .await
         .expect("start server");
+}
+
+fn logging() {
+    #[cfg(debug_assertions)]
+    std::env::set_var("RUST_LOG", "debug");
+
+    // Log all `tracing` events to files prefixed with `debug`. Since these
+    // files will be written to very frequently, roll the log file every minute.
+    let debug_file = rolling::minutely("./logs", "debug");
+    // Log warnings and errors to a separate file. Since we expect these events
+    // to occur less frequently, roll that file on a daily basis instead.
+    let warn_file = rolling::daily("./logs", "warnings").with_max_level(tracing::Level::WARN);
+    let all_files = debug_file.and(warn_file);
+
+    tracing_subscriber::fmt()
+        .with_writer(all_files)
+        .with_writer(std::io::stderr)
+        .compact()
+        .with_line_number(true)
+        .with_env_filter(EnvFilter::from_default_env())
+        .init();
 }
 
 async fn root() -> &'static str {

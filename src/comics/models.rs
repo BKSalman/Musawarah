@@ -6,8 +6,8 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
-    chapters::models::ChapterResponseBrief,
-    comic_genres::models::ComicGenre,
+    comics::chapters::models::ChapterResponseBrief,
+    comics::comic_genres::models::ComicGenre,
     schema::{comic_ratings, comics},
     users::models::{User, UserResponseBrief},
     Rating,
@@ -77,8 +77,9 @@ pub struct UpdateComic {
     pub description: Option<String>,
 }
 
-#[derive(Deserialize, Serialize, ToSchema, TS)]
+#[derive(garde::Validate, Deserialize, Serialize, ToSchema, TS)]
 #[ts(export)]
 pub struct NewComicRating {
-    pub rating: f64,
+    #[garde(range(min = 0, max = 5))]
+    pub rating: i32,
 }

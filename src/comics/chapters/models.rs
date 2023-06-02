@@ -71,7 +71,6 @@ impl Rating for ChapterRating {
 
 #[derive(Deserialize, ToSchema, Debug)]
 pub struct CreateChapter {
-    pub comic_id: Uuid,
     pub title: Option<String>,
     pub description: Option<String>,
     pub number: i32,
@@ -141,8 +140,9 @@ pub struct ChapterPageResponse {
     pub image: ImageResponse,
 }
 
-#[derive(Serialize, Deserialize, ToSchema, TS, Debug)]
+#[derive(garde::Validate, Serialize, Deserialize, ToSchema, TS, Debug)]
 #[ts(export)]
 pub struct NewChapterRating {
-    pub rating: f64,
+    #[garde(range(min = 0, max = 10))]
+    pub rating: i32,
 }

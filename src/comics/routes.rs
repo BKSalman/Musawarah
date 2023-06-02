@@ -9,21 +9,25 @@ use diesel_async::{
     pooled_connection::deadpool::Pool, scoped_futures::ScopedFutureExt, AsyncConnection,
     AsyncPgConnection, RunQueryDsl,
 };
+use garde::Validate;
 use itertools::multizip;
 use uuid::Uuid;
 
 use crate::{
     auth::AuthExtractor,
-    chapters::models::{Chapter, ChapterResponseBrief},
-    comic_genres::models::{ComicGenre, Genre, GenreMapping},
-    comics::models::NewComicRating,
+    comics::chapters::models::{Chapter, ChapterResponseBrief},
+    comics::comic_genres::models::{ComicGenre, Genre, GenreMapping},
+    comics::{models::NewComicRating, SortingOrder},
     schema::{comic_genres, comic_genres_mapping, comic_ratings, comics, users},
     users::models::{User, UserResponseBrief, UserRole},
     utils::average_rating,
-    AppState, PaginationParams,
+    AppState,
 };
 
 use super::{
+    chapters::routes::chapters_router,
+    comic_comments::routes::comic_comments_router,
+    comic_genres::routes::comic_genres_router,
     models::{Comic, ComicRating, ComicResponse, CreateComic, UpdateComic},
     ComicsError, ComicsParams,
 };
@@ -35,7 +39,10 @@ pub fn comics_router() -> Router<AppState> {
         .route("/:comic_id", put(update_comic))
         .route("/:comic_id", delete(delete_comic))
         .route("/:comic_id", get(get_comic))
-        .route("/rate/:comic_id", post(rate_comic))
+        .route("/:comic_id/rate", post(rate_comic))
+        .nest("/", comic_genres_router())
+        .nest("/", comic_comments_router())
+        .nest("/", chapters_router())
 }
 
 /// Create Comic
@@ -134,7 +141,7 @@ pub async fn create_comic(
 /// Get comic by id
 #[utoipa::path(
     get,
-    path = "/api/v1/comics/{comic_id}",
+    path = "/api/v1/comics/:comic_id",
     responses(
         (status = 200, description = "Caller authorized. returned requested comic", body = ComicResponse),
         (status = StatusCode::UNAUTHORIZED, description = "Caller unauthorized", body = ErrorHandlingResponse ),
@@ -216,7 +223,7 @@ pub async fn get_comic(
     get,
     path = "/api/v1/comics",
     params(
-        PaginationParams,
+        ComicsParams,
     ),
     responses(
         (status = 200, body = [ComicResponse]),
@@ -224,7 +231,7 @@ pub async fn get_comic(
     ),
     tag = "Comics API"
 )]
-#[axum::debug_handler]
+#[axum::debug_handler(state = AppState)]
 pub async fn get_comics(
     State(pool): State<Pool<AsyncPgConnection>>,
     Query(params): Query<ComicsParams>,
@@ -232,19 +239,31 @@ pub async fn get_comics(
     tracing::debug!("cursor: {:#?}", params);
     let mut db = pool.get().await?;
 
-    let mut query = comics::table
+    let mut comics_query = comics::table
         .inner_join(users::table)
+        .left_join(comic_ratings::table)
         .left_join(comic_genres_mapping::table.inner_join(comic_genres::table))
-        .limit(10)
         .filter(comics::id.gt(params.min_id))
         .filter(comics::id.lt(params.max_id))
         .into_boxed();
 
     if let Some(genre_filter) = params.genre {
-        query = query.filter(comic_genres::id.eq(genre_filter));
+        comics_query = comics_query.filter(comic_genres::id.eq(genre_filter));
     }
 
-    let (comics, users): (Vec<Comic>, Vec<User>) = query
+    if let Some(sorting_order) = params.sorting {
+        match sorting_order {
+            SortingOrder::Descending => {
+                comics_query = comics_query.order(comic_ratings::rating.desc())
+            }
+            SortingOrder::Ascending => {
+                comics_query = comics_query.order(comic_ratings::rating.asc())
+            }
+        }
+    }
+
+    let (comics, users): (Vec<Comic>, Vec<User>) = comics_query
+        .limit(10)
         .select((Comic::as_select(), User::as_select()))
         .load::<(Comic, User)>(&mut db)
         .await?
@@ -315,7 +334,7 @@ pub async fn get_comics(
 /// Update comic
 #[utoipa::path(
     put,
-    path = "/api/v1/comics/{comic_id}",
+    path = "/api/v1/comics/:comic_id",
     request_body(content = UpdateComic, content_type = "application/json"),
     responses(
         (status = 200, description = "Specified comic has been successfully updated", body = Uuid),
@@ -355,7 +374,7 @@ pub async fn update_comic(
 /// Delete comic
 #[utoipa::path(
     delete,
-    path = "/api/v1/comics/{comic_id}",
+    path = "/api/v1/comics/:comic_id",
     responses(
         (status = 200, description = "Specified comic has been successfully deleted"),
         (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
@@ -385,7 +404,8 @@ pub async fn delete_comic(
 /// Rate comic
 #[utoipa::path(
     get,
-    path = "/api/v1/comics/rate/{comic_id}",
+    path = "/api/v1/comics/:comic_id/rate",
+    request_body(content = NewComicRating, description = "Validation:\n- rating: 0-5", content_type = "application/json"),
     responses(),
     security(
         ("auth" = [])
@@ -399,6 +419,8 @@ pub async fn rate_comic(
     Path(comic_id): Path<Uuid>,
     Json(payload): Json<NewComicRating>,
 ) -> Result<(), ComicsError> {
+    payload.validate(&())?;
+
     let mut db = pool.get().await?;
 
     match diesel::update(
@@ -408,15 +430,15 @@ pub async fn rate_comic(
     )
     .set((
         comic_ratings::updated_at.eq(Some(Utc::now())),
-        comic_ratings::rating.eq(payload.rating),
+        comic_ratings::rating.eq(payload.rating as f64),
     ))
-    .execute(&mut db)
+    .get_result::<ComicRating>(&mut db)
     .await
     {
         Err(diesel::result::Error::NotFound) => {
             let comic_rating = ComicRating {
                 id: Uuid::now_v7(),
-                rating: payload.rating,
+                rating: payload.rating as f64,
                 created_at: Utc::now(),
                 updated_at: None,
                 user_id: auth.current_user.id,

@@ -9,13 +9,10 @@ use tower_cookies::cookie::Key;
 use ts_rs::TS;
 use utoipa::{
     openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme},
-    IntoParams, Modify, OpenApi, ToSchema,
+    Modify, OpenApi, ToSchema,
 };
-use uuid::Uuid;
 
 pub mod auth;
-pub mod chapters;
-pub mod comic_genres;
 pub mod comics;
 pub mod common;
 pub mod migrations;
@@ -66,31 +63,37 @@ pub static COOKIES_SECRET: OnceCell<Key> = OnceCell::new();
         comics::routes::delete_comic,
         comics::routes::get_comic,
         comics::routes::get_comics,
-        chapters::routes::create_chapter,
-        chapters::routes::create_chapter_page,
-        chapters::routes::get_chapters,
-        chapters::routes::get_chapter,
-        chapters::routes::delete_chapter,
-        chapters::routes::delete_chapter_page,
-        chapters::routes::update_chapter,
+        comics::routes::rate_comic,
+        comics::chapters::routes::create_chapter,
+        comics::chapters::routes::create_chapter_page,
+        comics::chapters::routes::get_chapters,
+        comics::chapters::routes::get_chapter,
+        comics::chapters::routes::delete_chapter,
+        comics::chapters::routes::delete_chapter_page,
+        comics::chapters::routes::update_chapter,
+        comics::chapters::routes::rate_chapter,
         // chapters::routes::update_chapter_page,
-        comic_genres::routes::get_genres,
-        comic_genres::routes::create_genre,
-        comic_genres::routes::update_genre,
-        comic_genres::routes::delete_genre,
+        comics::comic_genres::routes::get_genres,
+        comics::comic_genres::routes::create_genre,
+        comics::comic_genres::routes::update_genre,
+        comics::comic_genres::routes::delete_genre,
+        // comics::comic_comments::routes::get_comments,
+        comics::comic_comments::routes::create_comment,
     ),
     components(
         schemas(common::models::ImageResponse),
         schemas(comics::models::CreateComic),
         schemas(comics::models::UpdateComic),
         schemas(comics::models::ComicResponse),
-        schemas(comic_genres::models::ComicGenre),
-        schemas(chapters::models::CreateChapter),
-        schemas(chapters::models::UpdateChapter),
-        schemas(chapters::models::CreateChapterPage),
-        schemas(chapters::models::ChapterResponse),
-        schemas(chapters::models::ChapterResponseBrief),
-        schemas(chapters::models::ChapterPageResponse),
+        schemas(comics::models::NewComicRating),
+        schemas(comics::comic_genres::models::ComicGenre),
+        schemas(comics::chapters::models::CreateChapter),
+        schemas(comics::chapters::models::UpdateChapter),
+        schemas(comics::chapters::models::CreateChapterPage),
+        schemas(comics::chapters::models::ChapterResponse),
+        schemas(comics::chapters::models::ChapterResponseBrief),
+        schemas(comics::chapters::models::ChapterPageResponse),
+        schemas(comics::chapters::models::NewChapterRating),
         schemas(users::models::UserResponse),
         schemas(users::models::UserClaims),
         schemas(users::models::CreateUser),
@@ -107,14 +110,6 @@ pub static COOKIES_SECRET: OnceCell<Key> = OnceCell::new();
     )
 )]
 pub struct ApiDoc;
-
-#[derive(Debug, Deserialize, IntoParams)]
-pub struct PaginationParams {
-    #[serde(default = "Uuid::nil")]
-    min_id: Uuid,
-    #[serde(default = "Uuid::max")]
-    max_id: Uuid,
-}
 
 #[derive(Serialize, Deserialize, ToSchema, Debug, Default, TS)]
 #[ts(export)]
@@ -160,4 +155,12 @@ impl Modify for SecurityAddon {
 
 pub trait Rating {
     fn rating(&self) -> f64;
+}
+
+#[derive(Debug, Deserialize)]
+pub enum SortingOrder {
+    #[serde(rename = "desc")]
+    Descending,
+    #[serde(rename = "asc")]
+    Ascending,
 }
