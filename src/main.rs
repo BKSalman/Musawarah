@@ -22,8 +22,12 @@ use std::{
 };
 use tower_cookies::{CookieManagerLayer, Key};
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
+use tracing::Level;
 use tracing_appender::rolling;
-use tracing_subscriber::{fmt::writer::MakeWriterExt, EnvFilter};
+use tracing_subscriber::{
+    fmt::writer::MakeWriterExt, prelude::__tracing_subscriber_SubscriberExt,
+    util::SubscriberInitExt,
+};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
@@ -121,23 +125,28 @@ async fn main() {
 }
 
 fn logging() {
-    #[cfg(debug_assertions)]
-    std::env::set_var("RUST_LOG", "debug");
-
     // Log all `tracing` events to files prefixed with `debug`. Since these
     // files will be written to very frequently, roll the log file every minute.
     let debug_file = rolling::minutely("./logs", "debug");
     // Log warnings and errors to a separate file. Since we expect these events
     // to occur less frequently, roll that file on a daily basis instead.
-    let warn_file = rolling::daily("./logs", "warnings").with_max_level(tracing::Level::WARN);
-    let all_files = debug_file.and(warn_file);
+    let warn_file = rolling::daily("./logs", "warnings");
 
-    tracing_subscriber::fmt()
-        .with_writer(all_files)
-        .with_writer(std::io::stderr)
-        .compact()
-        .with_line_number(true)
-        .with_env_filter(EnvFilter::from_default_env())
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::fmt::Layer::default()
+                .with_writer(debug_file.with_max_level(Level::DEBUG))
+                .with_ansi(false),
+        )
+        .with(
+            tracing_subscriber::fmt::Layer::default()
+                .with_writer(warn_file.with_max_level(tracing::Level::WARN))
+                .with_ansi(false),
+        )
+        .with(
+            tracing_subscriber::fmt::Layer::default()
+                .with_writer(std::io::stdout.with_max_level(Level::DEBUG)),
+        )
         .init();
 }
 
