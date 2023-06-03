@@ -2,7 +2,7 @@ use std::io::SeekFrom;
 
 use axum::{
     extract::{DefaultBodyLimit, Multipart, Path, Query, State},
-    routing::{get, post},
+    routing::{delete, get, post, put},
     Json, Router,
 };
 use chrono::Utc;
@@ -52,16 +52,22 @@ use uuid::Uuid;
 
 const ALLOWED_MIME_TYPES: [&str; 3] = ["image/jpeg", "image/jpg", "image/png"];
 
+pub const FILE_SIZE_LIMIT_MB: usize = 10;
+
+const FILE_SIZE_LIMIT: usize = FILE_SIZE_LIMIT_MB * 1024 * 1024; // 10mb
+
 pub fn chapters_router() -> Router<AppState> {
     Router::new()
         .layer(DefaultBodyLimit::disable())
         // TODO: image compression
-        .layer(RequestBodyLimitLayer::new(10 * 1024 * 1024 /* 10mb */))
-        .route("/", post(create_chapter))
-        .route("/page", post(create_chapter_page))
-        .route("/:comic_id", get(get_chapters))
-        .route("/:chapter_id/s", get(get_chapter))
-        .route("/:chapter_id/rate", post(rate_chapter))
+        .layer(RequestBodyLimitLayer::new(FILE_SIZE_LIMIT))
+        .route("/:comic_id/chapters", post(create_chapter))
+        .route("/:comic_id/chapters", get(get_chapters))
+        .route("/chapters/:chapter_id", delete(delete_chapter))
+        .route("/chapters/:chapter_id", put(update_chapter))
+        .route("/chapters/:chapter_id/s", get(get_chapter))
+        .route("/chapters/:chapter_id/rate", post(rate_chapter))
+        .route("/chapters/page", post(create_chapter_page))
 }
 
 /// Create a chapter
@@ -87,7 +93,7 @@ pub async fn create_chapter(
     let chapter = Chapter {
         id: Uuid::now_v7(),
         user_id: auth.current_user.id,
-        comic_id: comic_id,
+        comic_id,
         number: payload.number,
         title: payload.title,
         description: payload.description,
@@ -383,12 +389,10 @@ pub async fn update_chapter(
     State(pool): State<Pool<AsyncPgConnection>>,
     Path(chapter_id): Path<Uuid>,
     Json(payload): Json<UpdateChapter>,
-) -> Result<(), ChaptersError> {
+) -> Result<Json<Uuid>, ChaptersError> {
     let mut db = pool.get().await?;
 
-    // TODO: check if the user is the author of the chapter
-
-    let _chapter = diesel::update(
+    let chapter = diesel::update(
         comic_chapters::table
             .filter(comic_chapters::id.eq(chapter_id))
             .filter(comic_chapters::user_id.eq(auth.current_user.id)),
@@ -397,9 +401,8 @@ pub async fn update_chapter(
     .returning(Chapter::as_returning())
     .get_result(&mut db)
     .await?;
-    // TODO: error handling
 
-    Ok(())
+    Ok(Json(chapter.id))
 }
 
 /// Delete chapter
@@ -417,17 +420,18 @@ pub async fn delete_chapter(
     auth: AuthExtractor<{ UserRole::User as u32 }>,
     State(pool): State<Pool<AsyncPgConnection>>,
     Path(chapter_id): Path<Uuid>,
-) -> Result<Json<serde_json::Value>, ChaptersError> {
+) -> Result<Json<Uuid>, ChaptersError> {
     let mut db = pool.get().await?;
 
-    let _res = diesel::delete(
+    let chapter = diesel::delete(
         comic_chapters::table
             .filter(comic_chapters::id.eq(chapter_id))
             .filter(comic_chapters::user_id.eq(auth.current_user.id)),
     )
-    .execute(&mut db);
+    .get_result::<Chapter>(&mut db)
+    .await?;
 
-    Ok(Json(json!({ "message": format!("deleted chapter") })))
+    Ok(Json(chapter.id))
 }
 
 /// Delete chapter page

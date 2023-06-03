@@ -38,6 +38,7 @@ pub struct Config {
 
 impl Config {
     pub fn load_config() -> Result<Self, ConfigError> {
+        tracing::info!("getting config file");
         let config_file = fs::read_to_string("config.toml")?;
         toml::from_str::<Config>(&config_file).map_err(Into::into)
     }

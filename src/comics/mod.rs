@@ -7,6 +7,8 @@ use uuid::Uuid;
 
 use crate::{ErrorResponse, SortingOrder};
 
+use self::chapters::routes::FILE_SIZE_LIMIT_MB;
+
 pub mod chapters;
 pub mod comic_comments;
 pub mod comic_genres;
@@ -36,7 +38,7 @@ pub enum ComicsError {
     #[error("bad request")]
     BadRequest,
 
-    #[error("image size too large, maximum image size is 10MB")]
+    #[error("image size too large, maximum image size is {}MB", FILE_SIZE_LIMIT_MB)]
     ImageTooLarge,
 
     #[error(transparent)]
