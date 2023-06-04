@@ -1,6 +1,6 @@
 # مُصَوّرَة
 
-منصة للقصص المصورة
+منصة للقصص المصورة المستقلة
 
 # Built with
 This platform is developed using the following tools and technologies:
