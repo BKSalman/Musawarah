@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { ComicResponseBrief } from "../../../../bindings/ComicResponseBrief";
+  import type { ComicResponseBrief } from "bindings/ComicResponseBrief";
   import GalleryItem from "./GalleryItem.svelte";
 
   export let comics: ComicResponseBrief[] | null;

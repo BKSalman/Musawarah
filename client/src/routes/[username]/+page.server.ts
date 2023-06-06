@@ -1,28 +1,23 @@
 import { error } from '@sveltejs/kit';
-import { writable } from 'svelte/store';
-import type { PageServerData } from './$types';
-import type { PostResponse } from '../../../../bindings/PostResponse';
+import type { PageServerLoad } from './$types';
+import type { ComicResponse } from 'bindings/ComicResponse';
 
-export async function load({ fetch, params, cookies }) {
+export const load = (async ({ fetch, params }) => {
 
   const { username } = params;
 
-  const authKey = cookies.get("auth_key");
-
-  const res = await fetch(`http://127.0.0.1:6060/api/users/${username}`, {
-    headers: {
-      "Authorization": `Bearer ${authKey}`
-    }
-  });
+  const res = await fetch(`http://localhost:6060/api/v1/users/comics/${username}`, {
+            credentials: "include",
+          });
 
   if (res.status != 200) {
-    const errorMessages = await res.json();
-    throw error(res.status, errorMessages);
+    const errorMessage = await res.json();
+    throw error(res.status, errorMessage.error);
   }
 
-  const data: Array<PostResponse> = await res.json();
+  const data: ComicResponse[] = await res.json();
 
   return {
-    posts: data
+    comics: data
   };
-}
+}) satisfies PageServerLoad;
