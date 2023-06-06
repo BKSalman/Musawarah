@@ -1,13 +1,13 @@
 use axum::{http::StatusCode, response::IntoResponse};
+use diesel::result::DatabaseErrorKind;
+
+use crate::ErrorResponse;
 
 pub mod models;
 pub mod routes;
 
 #[derive(thiserror::Error, Debug)]
 pub enum ComicCommentsError {
-    #[error("something")]
-    PlaceHolder,
-
     #[error(transparent)]
     Diesel(#[from] diesel::result::Error),
 
@@ -20,8 +20,29 @@ impl IntoResponse for ComicCommentsError {
         tracing::error!("{:#?}", self);
 
         match self {
-            ComicCommentsError::PlaceHolder => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
-            ComicCommentsError::Diesel(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+            ComicCommentsError::Diesel(diesel_err) => {
+                if let diesel::result::Error::DatabaseError(
+                    DatabaseErrorKind::ForeignKeyViolation,
+                    message,
+                ) = diesel_err
+                {
+                    let Some(constraint) = message.constraint_name() else {
+                        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                    };
+
+                    if constraint == "comic_comments_comic_id_fkey" {
+                        return (
+                            StatusCode::BAD_REQUEST,
+                            ErrorResponse {
+                                error: String::from("comic not found"),
+                                ..Default::default()
+                            },
+                        )
+                            .into_response();
+                    }
+                }
+                StatusCode::INTERNAL_SERVER_ERROR.into_response()
+            }
             _ => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
         }
     }
