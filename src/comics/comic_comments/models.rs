@@ -1,11 +1,13 @@
 use crate::{
     comics::models::Comic,
     schema::{comic_comments, comic_comments_mapping},
-    users::models::User,
+    users::models::{User, UserResponseBrief},
 };
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 #[derive(Insertable, Queryable, Identifiable, Associations, Selectable, Debug)]
@@ -21,7 +23,7 @@ pub struct ComicComment {
     pub user_id: Uuid,
 }
 
-#[derive(Insertable, Queryable, Identifiable, Associations, Selectable, Debug)]
+#[derive(Insertable, Queryable, Identifiable, Associations, Selectable, Debug, Clone)]
 #[diesel(belongs_to(ComicComment, foreign_key = parent_comment_id))]
 #[diesel(table_name = comic_comments_mapping)]
 #[diesel(primary_key(parent_comment_id, child_comment_id))]
@@ -32,14 +34,16 @@ pub struct ComicCommentMapping {
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct CreateComicComment {
-    pub comic_id: Uuid,
     pub content: String,
     pub parent_comment_id: Option<Uuid>,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, ToSchema, TS)]
+#[ts(export)]
 pub struct ComicCommentResponse {
+    pub id: Uuid,
     pub content: String,
-    pub user_id: Uuid,
-    pub parent_comment_id: Option<Uuid>,
+    pub user: UserResponseBrief,
+    pub parent_comment: Option<Uuid>,
+    pub child_comments: Option<Vec<Uuid>>,
 }

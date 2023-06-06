@@ -9,12 +9,12 @@ use axum::{
     RequestPartsExt,
 };
 use chrono::{Duration, Utc};
-use diesel::{ExpressionMethods, QueryDsl, SelectableHelper};
+use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::{pooled_connection::deadpool::Pool, AsyncPgConnection, RunQueryDsl};
 use tower_cookies::Cookies;
 use uuid::Uuid;
 
-use crate::{schema::sessions, sessions::models::Session, AppState, ErrorResponse, COOKIES_SECRET};
+use crate::{schema::sessions, AppState, ErrorResponse, COOKIES_SECRET};
 
 pub const SESSION_COOKIE_NAME: &str = "session_id";
 

@@ -95,6 +95,7 @@ pub static COOKIES_SECRET: OnceCell<Key> = OnceCell::new();
         schemas(comics::chapters::models::ChapterResponseBrief),
         schemas(comics::chapters::models::ChapterPageResponse),
         schemas(comics::chapters::models::NewChapterRating),
+        schemas(comics::comic_comments::models::ComicCommentResponse),
         schemas(users::models::UserResponse),
         schemas(users::models::UserClaims),
         schemas(users::models::CreateUser),
