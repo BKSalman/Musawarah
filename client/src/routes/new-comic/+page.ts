@@ -3,7 +3,7 @@ import type { PageLoad } from './$types';
 import type { ComicGenre } from '../../../../bindings/ComicGenre';
 
 export const load = (async ({ fetch }) => {
-    const res = await fetch("http://localhost:6060/api/v1/comic-genres");
+    const res = await fetch("http://localhost:6060/api/v1/comics/genres");
 
     if (res.status !== 200) {
         const errorMessage = await res.json();
