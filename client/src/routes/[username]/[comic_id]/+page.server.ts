@@ -2,7 +2,6 @@ import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import type { ComicResponse } from 'bindings/ComicResponse';
 import type { ComicCommentResponse } from 'bindings/ComicCommentResponse';
-import _ from "lodash";
 
 export const load = (async ({ fetch, params, cookies}) => {
     const { comic_id, username } = params;
@@ -24,46 +23,42 @@ export const load = (async ({ fetch, params, cookies}) => {
     }
 
     let comments: ComicCommentResponse[] = await comment_res.json();
-    
-    for (const comment of comments) {
-        fill_children(comment, 4);
-    }
 
-    console.log(comments);
+    let top_level_comments: ComicCommentResponse[] = comments.filter((comment) => {
+        return comment.parent_comment === null;
+    });
+    
+    for (const comment of top_level_comments) {
+        fill_children(comment, comments, 3);
+    }
 
     return {
         comic: comic,
-        comments: comments,
+        comments: top_level_comments,
     };
 
 }) satisfies PageServerLoad;
 
-const fill_children = (parent_comment: ComicCommentResponse, comments: ComicCommentResponse[], limit: number) => {
-    let result: any = [];
-
+const fill_children = (comment: ComicCommentResponse, comments: ComicCommentResponse[], limit: number) => {
     if (limit <= 0) {
-        return result;
+        comment.child_comments = [];
+        return;
     }
 
-    for (const child_id of parent_comment.child_comments) {
-        child_comment = get_comment_by_id(child_id, comments);
-        fill_children(comment.child_comments, limit - 1);
+    comment.child_comments = comment.child_comments?.map((child_id) => {
+        const child_comment = get_comment_by_id(child_id, comments);
 
-        result.push(comment);
+        if (child_comment) {
+            console.log(child_comment);
+            fill_children(child_comment, comments, limit - 1);
 
-        // for (const child_comment of comments) {
-        //     if (parent_comment.child_comments?.find((id) => id == child_comment.id)) {
-        //         children.push(child_comment);
-        //         result.splice(result.findIndex((c) => c.id == child_comment.id), 1);
-        //     }
-        // }
-
-        // if (children.length > 0) {
-        //     parent_comment.child_comments = children;
-        // }
-    }
+            return child_comment;
+        }
+    });
 }
 
-const get_comment_by_id = (id: string, comments: ComicCommentResponse) => {
-    
+const get_comment_by_id = (id: string, comments: ComicCommentResponse[]): ComicCommentResponse | undefined => {
+    return comments.find((comment) => {
+        return comment.id == id;
+    });
 }

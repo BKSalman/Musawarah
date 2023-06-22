@@ -1,6 +1,8 @@
 <script lang="ts">
     import { page } from '$app/stores';
     import type { PageServerData } from './$types';
+    import ChapterThumbnail from '$lib/components/ChapterThumbnail.svelte';
+    import Comment from '$lib/components/Comment.svelte';
 
     export let data: PageServerData;
 
@@ -15,58 +17,34 @@
             <div>{comic.description}</div>
         {/if}
     </div>
-        <div class="chapters">
         <span>chapters:</span>
+        <div class="chapters">
             {#each comic.chapters as chapter}
-                <div class="chapter">
-                    <a href={`${$page.url.pathname}/${chapter.id}`}><div>{chapter.number}</div></a>
-                    {#if chapter.title}
-                        <div>{chapter.title}</div>
-                    {/if}
-                </div>
+                <ChapterThumbnail {chapter} />
             {/each}
         </div>
     <div class="comments">
         <span>comments:</span>
         {#each comments as comment}
-            <div class="comment">
-                <div class="">{comment.user.username}</div>
-                <div class="">{comment.content}</div>
-                <div class="children">
-                    {#if comment.child_comments}
-                        {#each comment.child_comments as comment}
-                            <div class="">{comment.user.username}</div>
-                            <div class="">{comment.content}</div>
-                        {/each}
-                    {/if}
-                </div>
-            </div>
+            <Comment {comment}/>
         {/each}
     </div>
 </div>
 
 <style>
-.children {
-    margin-top: 10px;
-    margin-left: 15px;
-}
 .comic {
     background: black;
     width: 90%;
     margin-bottom: 10px;
 }
-.chapter {
-    background: black;
+.chapters {
     width: 90%;
-    margin-bottom: 10px;
+    display: grid;
+    grid-template-columns: auto auto auto;
+    gap: 5px 5px;
+    place-items: center;
 }
 .comments {
     margin-bottom: 10px;
-}
-.comment {
-    background: black;
-    margin-bottom: 10px;
-    border-radius: 5px;
-    width: 80%;
 }
 </style>
