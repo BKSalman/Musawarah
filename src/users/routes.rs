@@ -22,7 +22,7 @@ use uuid::Uuid;
 
 use crate::{
     auth::AuthExtractor,
-    comics::chapters::models::{Chapter, ChapterResponseBrief},
+    comics::chapters::models::{Chapter, ChapterPage, ChapterPageResponse, ChapterResponseBrief},
     comics::comic_genres::models::{ComicGenre, Genre, GenreMapping},
     comics::{
         models::{Comic, ComicRating, ComicResponse},
@@ -108,33 +108,6 @@ pub async fn create_user(
                     updated_at: None,
                     last_login: None,
                 };
-                // .into_active_model()
-                // .insert(&state.db)
-                // .await
-                // .map_err(|err| {
-                //     // tracing::error!("error {:#?}", err);
-                //     if let migration::DbErr::Query(sea_orm::RuntimeErr::SqlxError(sqlx::Error::Database(
-                //         error,
-                //     ))) = err
-                //     {
-                //         return match error.constraint() {
-                //             Some("users_username_key") => {
-                //                 tracing::error!("{}", error);
-                //                 UsersError::Conflict(String::from("username already taken"))
-                //             }
-                //             Some("users_email_key") => {
-                //                 tracing::error!("{}", error);
-                //                 UsersError::Conflict(String::from("email already taken"))
-                //             }
-                //             _ => {
-                //                 tracing::error!("sqlx error: {}", error);
-                //                 UsersError::InternalServerError
-                //             }
-                //         };
-                //     }
-                //     tracing::error!("Db error: {}", err);
-                //     UsersError::InternalServerError
-                // })?;
 
                 let user = diesel::insert_into(users::table)
                     .values(&user)
@@ -367,6 +340,11 @@ pub async fn get_user_comics(
         .load::<Chapter>(&mut db)
         .await?;
 
+    let chapter_pages = ChapterPage::belonging_to(&chapters)
+        .select(ChapterPage::as_select())
+        .load(&mut db)
+        .await?;
+
     let genres: Vec<(GenreMapping, Genre)> = GenreMapping::belonging_to(&comics)
         .inner_join(comic_genres::table)
         .select((GenreMapping::as_select(), Genre::as_select()))
@@ -408,6 +386,17 @@ pub async fn get_user_comics(
                             description: chapter.description,
                             number: chapter.number,
                             created_at: chapter.created_at,
+                            pages: chapter_pages
+                                .iter()
+                                .map(|page| ChapterPageResponse {
+                                    id: page.id,
+                                    number: page.number,
+                                    image: ImageResponse {
+                                        content_type: page.content_type.clone(),
+                                        path: page.path.clone(),
+                                    },
+                                })
+                                .collect(),
                         })
                         .collect(),
                     genres: genres

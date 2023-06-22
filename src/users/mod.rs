@@ -87,6 +87,7 @@ impl IntoResponse for UsersError {
             )
                 .into_response(),
             UsersError::Diesel(err) => {
+                // TODO: handle constraints
                 if let diesel::result::Error::NotFound = err {
                     return (
                         StatusCode::NOT_FOUND,
