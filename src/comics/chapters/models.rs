@@ -104,6 +104,7 @@ pub struct ChapterResponseBrief {
     pub number: i32,
     pub description: Option<String>,
     pub created_at: DateTime<chrono::Utc>,
+    pub pages: Vec<ChapterPageResponse>,
 }
 
 #[derive(ToSchema)]

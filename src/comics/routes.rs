@@ -18,6 +18,7 @@ use crate::{
     comics::chapters::models::{Chapter, ChapterResponseBrief},
     comics::comic_genres::models::{ComicGenre, Genre, GenreMapping},
     comics::{models::NewComicRating, SortingOrder},
+    common::models::ImageResponse,
     schema::{comic_genres, comic_genres_mapping, comic_ratings, comics, users},
     users::models::{User, UserResponseBrief, UserRole},
     utils::average_rating,
@@ -25,7 +26,10 @@ use crate::{
 };
 
 use super::{
-    chapters::routes::chapters_router,
+    chapters::{
+        models::{ChapterPage, ChapterPageResponse},
+        routes::chapters_router,
+    },
     comic_comments::routes::comic_comments_router,
     comic_genres::routes::comic_genres_router,
     models::{Comic, ComicRating, ComicResponse, CreateComic, UpdateComic},
@@ -172,6 +176,11 @@ pub async fn get_comic(
         .load(&mut db)
         .await?;
 
+    let chapter_pages = ChapterPage::belonging_to(&chapters)
+        .select(ChapterPage::as_select())
+        .load(&mut db)
+        .await?;
+
     let genres = GenreMapping::belonging_to(&comic)
         .inner_join(comic_genres::table)
         .select(Genre::as_select())
@@ -204,6 +213,17 @@ pub async fn get_comic(
                 number: chapter.number,
                 description: chapter.description,
                 created_at: chapter.created_at,
+                pages: chapter_pages
+                    .iter()
+                    .map(|page| ChapterPageResponse {
+                        id: page.id,
+                        number: page.number,
+                        image: ImageResponse {
+                            content_type: page.content_type.clone(),
+                            path: page.path.clone(),
+                        },
+                    })
+                    .collect(),
             })
             .collect(),
         genres: genres
@@ -274,6 +294,13 @@ pub async fn get_comics(
         .load::<Chapter>(&mut db)
         .await?;
 
+    let chapter_pages = ChapterPage::belonging_to(&chapters)
+        .select(ChapterPage::as_select())
+        .load(&mut db)
+        .await?;
+
+    let chapters_pages = chapter_pages.grouped_by(&chapters);
+
     let chapters = chapters.grouped_by(&comics);
 
     let genres: Vec<(GenreMapping, Genre)> = GenreMapping::belonging_to(&comics)
@@ -291,42 +318,61 @@ pub async fn get_comics(
 
     let comics_ratings: Vec<Vec<ComicRating>> = comics_ratings.grouped_by(&comics);
 
-    let comics: Result<Vec<ComicResponse>, ComicsError> =
-        multizip((users, comics, genres, chapters, comics_ratings))
-            .map(|(user, comic, genres, chapters, comic_ratings)| {
-                Ok(ComicResponse {
-                    id: comic.id,
-                    title: comic.title,
-                    description: comic.description,
-                    created_at: comic.created_at.to_string(),
-                    rating: average_rating(comic_ratings),
-                    author: UserResponseBrief {
-                        id: user.id,
-                        displayname: user.displayname,
-                        username: user.username,
-                        email: user.email,
-                        role: user.role,
-                    },
-                    chapters: chapters
-                        .into_iter()
-                        .map(|chapter| ChapterResponseBrief {
-                            id: chapter.id,
-                            title: chapter.title,
-                            number: chapter.number,
-                            description: chapter.description,
-                            created_at: chapter.created_at,
-                        })
-                        .collect(),
-                    genres: genres
-                        .into_iter()
-                        .map(|(_genre_mapping, genre)| ComicGenre {
-                            id: genre.id,
-                            name: genre.name,
-                        })
-                        .collect(),
-                })
+    let comics: Result<Vec<ComicResponse>, ComicsError> = multizip((
+        users,
+        comics,
+        genres,
+        chapters,
+        chapters_pages,
+        comics_ratings,
+    ))
+    .map(
+        |(user, comic, genres, chapters, chapter_pages, comic_ratings)| {
+            Ok(ComicResponse {
+                id: comic.id,
+                title: comic.title,
+                description: comic.description,
+                created_at: comic.created_at.to_string(),
+                rating: average_rating(comic_ratings),
+                author: UserResponseBrief {
+                    id: user.id,
+                    displayname: user.displayname,
+                    username: user.username,
+                    email: user.email,
+                    role: user.role,
+                },
+                chapters: chapters
+                    .into_iter()
+                    .map(|chapter| ChapterResponseBrief {
+                        id: chapter.id,
+                        title: chapter.title,
+                        number: chapter.number,
+                        description: chapter.description,
+                        created_at: chapter.created_at,
+                        pages: chapter_pages
+                            .iter()
+                            .map(|page| ChapterPageResponse {
+                                id: page.id,
+                                number: page.number,
+                                image: ImageResponse {
+                                    content_type: page.content_type.clone(),
+                                    path: page.path.clone(),
+                                },
+                            })
+                            .collect(),
+                    })
+                    .collect(),
+                genres: genres
+                    .into_iter()
+                    .map(|(_genre_mapping, genre)| ComicGenre {
+                        id: genre.id,
+                        name: genre.name,
+                    })
+                    .collect(),
             })
-            .collect();
+        },
+    )
+    .collect();
 
     Ok(Json(comics?))
 }

@@ -115,6 +115,7 @@ pub async fn create_chapter(
         number: chapter.number,
         description: chapter.description,
         created_at: chapter.created_at,
+        pages: vec![],
     }))
 }
 

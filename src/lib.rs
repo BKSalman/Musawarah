@@ -57,6 +57,7 @@ pub static COOKIES_SECRET: OnceCell<Key> = OnceCell::new();
     paths(
         users::routes::create_user,
         users::routes::login,
+        users::routes::logout,
         users::routes::get_user_comics,
         users::routes::get_user,
         comics::routes::create_comic,
