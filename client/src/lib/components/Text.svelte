@@ -42,8 +42,8 @@
 
 <span
   class={`${fontSize} ${className}`}
-  in:inFunc={inOptions}
-  out:outFunc={outOptions}
+  in:inFunc|global={inOptions}
+  out:outFunc|global={outOptions}
 >
   <slot />
 </span>
