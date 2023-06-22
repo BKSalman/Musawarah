@@ -83,7 +83,7 @@ impl<const USER_ROLE: u32> FromRequestParts<AppState> for AuthExtractor<USER_ROL
 
         #[cfg(not(debug_assertions))]
         {
-            remove_cookie_on_fail = cookie_to_be_removed
+            remove_cookie_on_fail = remove_cookie_on_fail
                 // TODO: use the actual musawarah domain
                 .domain("salmanforgot.com")
                 .secure(true);
@@ -124,15 +124,6 @@ impl<const USER_ROLE: u32> FromRequestParts<AppState> for AuthExtractor<USER_ROL
             UserRole::Staff => {
                 query = query.filter(users::role.eq(role).or(users::role.eq(UserRole::Admin)))
             }
-            UserRole::User => {
-                query = query.filter(
-                    users::role
-                        .eq(role)
-                        .or(users::role.eq(UserRole::Admin).or(users::role
-                            .eq(UserRole::Staff)
-                            .or(users::role.eq(UserRole::VerifiedUser)))),
-                )
-            }
             UserRole::VerifiedUser => {
                 query = query.filter(
                     users::role.eq(role).or(users::role
@@ -140,6 +131,7 @@ impl<const USER_ROLE: u32> FromRequestParts<AppState> for AuthExtractor<USER_ROL
                         .or(users::role.eq(UserRole::Staff))),
                 )
             }
+            UserRole::User => {}
         };
 
         let Ok((user, session)) = query
