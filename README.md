@@ -45,6 +45,9 @@ there are more environment variables needed, for those you can talk to Salman to
 after you have all environment variables, you need to export them all in bash you do:
 ```bash
 # in project root
+source .env
+
+# if it doesn't work use this
 export $(cat .env)
 ```
 
