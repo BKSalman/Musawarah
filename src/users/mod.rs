@@ -94,7 +94,7 @@ impl IntoResponse for UsersError {
                         "users_email_key" => (
                             StatusCode::CONFLICT,
                             ErrorResponse {
-                                error: String::from("user with a same email already exists"),
+                                error: String::from("user with the same email already exists"),
                                 ..Default::default()
                             },
                         )
@@ -102,7 +102,7 @@ impl IntoResponse for UsersError {
                         "users_username_key" => (
                             StatusCode::CONFLICT,
                             ErrorResponse {
-                                error: String::from("user with a same username already exists"),
+                                error: String::from("user with the same username already exists"),
                                 ..Default::default()
                             },
                         )
@@ -110,7 +110,7 @@ impl IntoResponse for UsersError {
                         "users_phone_number_key" => (
                             StatusCode::CONFLICT,
                             ErrorResponse {
-                                error: String::from("user with a same phone number already exists"),
+                                error: String::from("user with the same phone number already exists"),
                                 ..Default::default()
                             },
                         )
