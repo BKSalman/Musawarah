@@ -1,4 +1,5 @@
 use axum::{http::StatusCode, response::IntoResponse};
+use diesel::result::{DatabaseErrorKind, Error::DatabaseError};
 
 use crate::ErrorResponse;
 
@@ -86,9 +87,38 @@ impl IntoResponse for UsersError {
                 },
             )
                 .into_response(),
-            UsersError::Diesel(err) => {
-                // TODO: handle constraints
-                if let diesel::result::Error::NotFound = err {
+            UsersError::Diesel(diesel_error) => {
+                if let DatabaseError(DatabaseErrorKind::UniqueViolation, message) = &diesel_error {
+                    let constraint_name = message.constraint_name().unwrap();
+                    return match constraint_name {
+                        "users_email_key" => (
+                            StatusCode::CONFLICT,
+                            ErrorResponse {
+                                error: String::from("user with the same email already exists"),
+                                ..Default::default()
+                            },
+                        )
+                            .into_response(),
+                        "users_username_key" => (
+                            StatusCode::CONFLICT,
+                            ErrorResponse {
+                                error: String::from("user with the same username already exists"),
+                                ..Default::default()
+                            },
+                        )
+                            .into_response(),
+                        "users_phone_number_key" => (
+                            StatusCode::CONFLICT,
+                            ErrorResponse {
+                                error: String::from("user with the same phone number already exists"),
+                                ..Default::default()
+                            },
+                        )
+                            .into_response(),
+                        _ => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+                    };
+                }
+                if let diesel::result::Error::NotFound = diesel_error {
                     return (
                         StatusCode::NOT_FOUND,
                         ErrorResponse {

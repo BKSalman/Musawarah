@@ -69,7 +69,7 @@ impl IntoResponse for ComicsError {
                         "comics_title_key" => (
                             StatusCode::CONFLICT,
                             ErrorResponse {
-                                error: String::from("comic with same title already exists"),
+                                error: String::from("comic with the same title already exists"),
                                 ..Default::default()
                             },
                         )
