@@ -1,20 +1,24 @@
 <script lang="ts">
   import { z } from "zod";
-  import { superForm, superValidateSync } from "sveltekit-superforms/client";
+  import {
+    superForm,
+    superValidateSync,
+    setMessage,
+  } from "sveltekit-superforms/client";
   import { goto } from "$app/navigation";
+  import type { ErrorResponse } from "bindings/ErrorResponse";
 
   const loginSchema = z.object({
     email: z.string().email(),
     password: z.string().min(8),
   });
 
-  const { form, errors, constraints, enhance } = superForm(
+  const { form, message, errors, constraints, enhance } = superForm(
     superValidateSync(loginSchema),
     {
       SPA: true,
       validators: loginSchema,
       onUpdate: async ({ form }) => {
-        console.log(form.valid);
         if (form.valid) {
           const res = await fetch("http://localhost:6060/api/v1/users/login", {
             credentials: "include",
@@ -24,7 +28,12 @@
             },
             body: JSON.stringify(form.data),
           });
-          await goto("/");
+          if (res.status >= 400) {
+            const err: ErrorResponse = await res.json();
+            setMessage(form, err.error);
+          } else {
+            await goto("/");
+          }
         }
       },
     }
@@ -33,6 +42,7 @@
 
 <div class="login-container">
   <p>تسجيل الدخول</p>
+  {#if $message}<h3 class="invalid">{$message}</h3>{/if}
   <form class="login-form" method="POST" use:enhance>
     <div class="field">
       <input
