@@ -28,8 +28,13 @@
             },
             body: JSON.stringify(form.data),
           });
-
-          await goto("/login");
+          if (res.status >= 400) {
+            const err: ErrorResponse = await res.json();
+            const errField = err.error.includes("email") ? "email" : "username";
+            setError(form, errField, err.error);
+          } else {
+            await goto("/login");
+          }
         }
       },
     }
