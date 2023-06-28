@@ -119,4 +119,7 @@
     justify-content: space-between;
     width: 20em;
   }
+  .invalid {
+    color: red;
+  }
 </style>
