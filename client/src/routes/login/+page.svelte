@@ -27,12 +27,8 @@
           await goto("/");
         }
       },
-      onError({ result, message }) {
-        message.set(result.error.message);
-      },
     }
   );
-
 </script>
 
 <div class="login-container">

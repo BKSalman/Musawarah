@@ -32,12 +32,8 @@
           await goto("/login");
         }
       },
-      onError({ result, message }) {
-        message.set(result.error.message);
-      },
     }
   );
-
 </script>
 
 <div class="register-container">
