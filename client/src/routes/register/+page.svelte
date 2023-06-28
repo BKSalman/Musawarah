@@ -1,31 +1,32 @@
 <script lang="ts">
-  import { z } from 'zod';
-  import { superForm, setMessage } from "sveltekit-superforms/client";
-    import { goto } from '$app/navigation';
+  import { z } from "zod";
+  import {
+    superForm,
+    superValidateSync,
+    setError,
+  } from "sveltekit-superforms/client";
+  import { goto } from "$app/navigation";
+  import type { ErrorResponse } from "bindings/ErrorResponse";
 
-  let form_data;
-
-  const userSchema = z.object({
+  const registerSchema = z.object({
     username: z.string().min(5),
     email: z.string().email(),
     password: z.string().min(8),
   });
 
-  const { form, errors, message, constraints, enhance } = superForm(
-    form_data,
+  const { form, errors, constraints, enhance } = superForm(
+    superValidateSync(registerSchema),
     {
       SPA: true,
-      validators: userSchema,
+      validators: registerSchema,
       onUpdate: async ({ form }) => {
-        console.log(form.valid);
         if (form.valid) {
-          setMessage(form, "Valid data!");
           const res = await fetch("http://localhost:6060/api/v1/users", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
             },
-            body: JSON.stringify(form.data)
+            body: JSON.stringify(form.data),
           });
 
           await goto("/login");
@@ -41,7 +42,6 @@
 
 <div class="register-container">
   <p>التسجيل</p>
-  {#if $message}<h3>{$message}</h3>{/if}
   <form class="register-form" method="POST" use:enhance>
     <div class="field">
       <input
