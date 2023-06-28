@@ -75,8 +75,9 @@
       <label for="password" id="password-label">كلمة المرور</label>
     </div>
     {#if $errors.password}<small class="invalid">{$errors.password}</small>{/if}
-    <button type="submit">سجل الدخول</button>
+    <button type="submit">أنشئ الحساب</button>
   </form>
+  <p>لديك حساب؟ <a href="/login">سجل دخولك</a></p>
 </div>
 
 <style>
