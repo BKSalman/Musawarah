@@ -1,15 +1,19 @@
 <script lang="ts">
-  import { z } from 'zod';
-  import { superForm, setMessage, setError } from "sveltekit-superforms/client";
-  import { goto } from '$app/navigation';
-  import type { ErrorResponse } from '$app/../../../bindings/ErrorResponse';
-  import type { PageData } from './$types';
+  import { z } from "zod";
+  import {
+    superForm,
+    superValidateSync,
+    setMessage,
+    setError,
+  } from "sveltekit-superforms/client";
+  import { goto } from "$app/navigation";
+  import type { ErrorResponse } from "$app/../../../bindings/ErrorResponse";
+  import type { PageData } from "./$types";
+  import type { ComicResponse } from "bindings/ComicResponse";
 
   export let data: PageData;
 
   const { genres } = data;
-
-  let form_data;
 
   const comicSchema = z.object({
     title: z.string().min(3),
@@ -18,7 +22,7 @@
   });
 
   const { form, errors, message, constraints, enhance } = superForm(
-    form_data,
+    superValidateSync(comicSchema),
     {
       SPA: true,
       validators: comicSchema,
