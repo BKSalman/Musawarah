@@ -35,7 +35,7 @@
 
           if (genres_element?.children) {
             for (const genre of genres_element.children) {
-              const input = genre.firstChild;
+              const input = genre.firstChild as HTMLInputElement;
               if (input?.checked) {
                 genres.push(parseInt(input?.value));
               }
