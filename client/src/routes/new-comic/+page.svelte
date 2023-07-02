@@ -71,8 +71,8 @@
 
           setMessage(form, "تم الانشاء بنجاح!");
 
-          // TODO: redirect to comic
-          // await goto("/");
+          const response: ComicResponse = await res.json();
+          await goto(`/${response.author.username}/${response.id}`);
         }
       },
       onError({ result, message }) {
