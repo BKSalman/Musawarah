@@ -1,15 +1,19 @@
 <script lang="ts">
-  import { z } from 'zod';
-  import { superForm, setMessage, setError } from "sveltekit-superforms/client";
-  import { goto } from '$app/navigation';
-  import type { ErrorResponse } from '$app/../../../bindings/ErrorResponse';
-  import type { PageData } from './$types';
+  import { z } from "zod";
+  import {
+    superForm,
+    superValidateSync,
+    setMessage,
+    setError,
+  } from "sveltekit-superforms/client";
+  import { goto } from "$app/navigation";
+  import type { ErrorResponse } from "$app/../../../bindings/ErrorResponse";
+  import type { PageData } from "./$types";
+  import type { ComicResponse } from "bindings/ComicResponse";
 
   export let data: PageData;
 
   const { genres } = data;
-
-  let form_data;
 
   const comicSchema = z.object({
     title: z.string().min(3),
@@ -18,7 +22,7 @@
   });
 
   const { form, errors, message, constraints, enhance } = superForm(
-    form_data,
+    superValidateSync(comicSchema),
     {
       SPA: true,
       validators: comicSchema,
@@ -31,7 +35,7 @@
 
           if (genres_element?.children) {
             for (const genre of genres_element.children) {
-              const input = genre.firstChild;
+              const input = genre.firstChild as HTMLInputElement;
               if (input?.checked) {
                 genres.push(parseInt(input?.value));
               }
@@ -49,11 +53,11 @@
               description: form.data.description,
               genres,
               is_visible: true,
-            })
+            }),
           });
 
           if (res.status !== 200) {
-            const errorMessage: ErrorResponse = (await res.json());
+            const errorMessage: ErrorResponse = await res.json();
             console.log(res.status, res.statusText, errorMessage.error);
             if (errorMessage.error.includes("title")) {
               setError(form, "title", errorMessage.error);
@@ -62,13 +66,10 @@
             }
             return;
           }
-
-          console.log(await res.json());
-
           setMessage(form, "تم الانشاء بنجاح!");
 
-          // TODO: redirect to comic
-          // await goto("/");
+          const response: ComicResponse = await res.json();
+          await goto(`/${response.author.username}/${response.id}`);
         }
       },
       onError({ result, message }) {
@@ -76,7 +77,6 @@
       },
     }
   );
-
 </script>
 
 <div class="comic-container">
@@ -109,15 +109,16 @@
       />
       <label for="description" id="description-label">الوصف</label>
     </div>
-    {#if $errors.description}<small class="invalid">{$errors.description}</small>{/if}
+    {#if $errors.description}<small class="invalid">{$errors.description}</small
+      >{/if}
     <div class="field">
       <div id="genres">
-      {#each genres || [] as genre}
-        <div class="">
-          <input name={genre.name} type="checkbox" value={genre.id}/>
-          <label for={genre.name} id="genre">{genre.name}</label>
-        </div>
-      {/each}
+        {#each genres || [] as genre}
+          <div class="">
+            <input name={genre.name} type="checkbox" value={genre.id} />
+            <label for={genre.name} id="genre">{genre.name}</label>
+          </div>
+        {/each}
       </div>
       <label for="description" id="description-label">التصنيفات</label>
     </div>
@@ -174,4 +175,3 @@
     color: green;
   }
 </style>
-
