@@ -69,7 +69,7 @@
     </div>
     {#if $errors.password}<small class="invalid">{$errors.password}</small>{/if}
     <button type="submit">سجل الدخول</button>
-    <p>ليس لديك حساب؟ <a href="/register">سجل دخولك</a></p>
+    <p>ليس لديك حساب؟ <a href="/register">أنشئ حسابك</a></p>
   </form>
 </div>
 
