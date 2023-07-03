@@ -28,7 +28,9 @@
             },
             body: JSON.stringify(form.data),
           });
-          if (res.status >= 400) {
+          if (res.status == 401) {
+            setMessage(form, "Invalid Email or password");
+          } else if (res.status >= 400) {
             const err: ErrorResponse = await res.json();
             setMessage(form, err.error);
           } else {
