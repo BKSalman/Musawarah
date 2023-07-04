@@ -1,47 +1,48 @@
 <script lang="ts">
-  import { z } from 'zod';
-  import { superForm, setMessage } from "sveltekit-superforms/client";
-    import { goto } from '$app/navigation';
+  import { z } from "zod";
+  import {
+    superForm,
+    superValidateSync,
+    setError,
+  } from "sveltekit-superforms/client";
+  import { goto } from "$app/navigation";
+  import type { ErrorResponse } from "bindings/ErrorResponse";
 
-  let form_data;
-
-  const userSchema = z.object({
+  const registerSchema = z.object({
     username: z.string().min(5),
     email: z.string().email(),
     password: z.string().min(8),
   });
 
-  const { form, errors, message, constraints, enhance } = superForm(
-    form_data,
+  const { form, errors, constraints, enhance } = superForm(
+    superValidateSync(registerSchema),
     {
       SPA: true,
-      validators: userSchema,
+      validators: registerSchema,
       onUpdate: async ({ form }) => {
-        console.log(form.valid);
         if (form.valid) {
-          setMessage(form, "Valid data!");
           const res = await fetch("http://localhost:6060/api/v1/users", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
             },
-            body: JSON.stringify(form.data)
+            body: JSON.stringify(form.data),
           });
-
-          await goto("/login");
+          if (res.status >= 400) {
+            const err: ErrorResponse = await res.json();
+            const errField = err.error.includes("email") ? "email" : "username";
+            setError(form, errField, err.error);
+          } else {
+            await goto("/login");
+          }
         }
-      },
-      onError({ result, message }) {
-        message.set(result.error.message);
       },
     }
   );
-
 </script>
 
 <div class="register-container">
   <p>التسجيل</p>
-  {#if $message}<h3>{$message}</h3>{/if}
   <form class="register-form" method="POST" use:enhance>
     <div class="field">
       <input
@@ -79,8 +80,9 @@
       <label for="password" id="password-label">كلمة المرور</label>
     </div>
     {#if $errors.password}<small class="invalid">{$errors.password}</small>{/if}
-    <button type="submit">سجل الدخول</button>
+    <button type="submit">أنشئ الحساب</button>
   </form>
+  <p>لديك حساب؟ <a href="/login">سجل دخولك</a></p>
 </div>
 
 <style>
@@ -116,5 +118,8 @@
     display: flex;
     justify-content: space-between;
     width: 20em;
+  }
+  .invalid {
+    color: red;
   }
 </style>

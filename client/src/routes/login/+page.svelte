@@ -1,46 +1,50 @@
 <script lang="ts">
-  import { z } from 'zod';
-  import { superForm, setMessage } from "sveltekit-superforms/client";
-    import { goto } from '$app/navigation';
+  import { z } from "zod";
+  import {
+    superForm,
+    superValidateSync,
+    setMessage,
+  } from "sveltekit-superforms/client";
+  import { goto } from "$app/navigation";
+  import type { ErrorResponse } from "bindings/ErrorResponse";
 
-  let form_data;
-
-  const userSchema = z.object({
+  const loginSchema = z.object({
     email: z.string().email(),
     password: z.string().min(8),
   });
 
-  const { form, errors, message, constraints, enhance } = superForm(
-    form_data,
+  const { form, message, errors, constraints, enhance } = superForm(
+    superValidateSync(loginSchema),
     {
       SPA: true,
-      validators: userSchema,
+      validators: loginSchema,
       onUpdate: async ({ form }) => {
-        console.log(form.valid);
         if (form.valid) {
-          setMessage(form, "Valid data!");
           const res = await fetch("http://localhost:6060/api/v1/users/login", {
             credentials: "include",
             method: "POST",
             headers: {
               "Content-Type": "application/json",
             },
-            body: JSON.stringify(form.data)
+            body: JSON.stringify(form.data),
           });
-          await goto("/");
+          if (res.status == 401) {
+            setMessage(form, "Invalid Email or password");
+          } else if (res.status >= 400) {
+            const err: ErrorResponse = await res.json();
+            setMessage(form, err.error);
+          } else {
+            await goto("/");
+          }
         }
-      },
-      onError({ result, message }) {
-        message.set(result.error.message);
       },
     }
   );
-
 </script>
 
 <div class="login-container">
   <p>تسجيل الدخول</p>
-  {#if $message}<h3>{$message}</h3>{/if}
+  {#if $message}<h3 class="invalid">{$message}</h3>{/if}
   <form class="login-form" method="POST" use:enhance>
     <div class="field">
       <input
@@ -67,6 +71,7 @@
     </div>
     {#if $errors.password}<small class="invalid">{$errors.password}</small>{/if}
     <button type="submit">سجل الدخول</button>
+    <p>ليس لديك حساب؟ <a href="/register">أنشئ حسابك</a></p>
   </form>
 </div>
 
@@ -103,5 +108,8 @@
     display: flex;
     justify-content: space-between;
     width: 20em;
+  }
+  .invalid {
+    color: red;
   }
 </style>
