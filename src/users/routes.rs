@@ -49,7 +49,7 @@ pub fn users_router() -> Router<AppState> {
     Router::new()
         .route("/comics/:username", get(get_user_comics))
         .route("/logout", get(logout))
-        .route("/:user_id", get(get_user))
+        .route("/:username", get(get_user))
         .route("/", post(create_user))
         .route("/login", post(login))
 }
@@ -416,7 +416,7 @@ pub async fn get_user_comics(
 /// Get user by username
 #[utoipa::path(
     get,
-    path = "/api/v1/users/:user_id",
+    path = "/api/v1/users/:username",
     responses(
         (status = 200, description = "Caller authorized. returned current user info", body = UserClaims),
         (status = StatusCode::UNAUTHORIZED, description = "Caller unauthorized", body = ErrorHandlingResponse ),
@@ -430,13 +430,13 @@ pub async fn get_user_comics(
 #[axum::debug_handler(state = AppState)]
 pub async fn get_user(
     State(pool): State<Pool<AsyncPgConnection>>,
-    Path(user_id): Path<Uuid>,
+    Path(username): Path<String>,
     _auth: AuthExtractor<{ UserRole::User as u32 }>,
 ) -> Result<Json<UserResponse>, UsersError> {
     let mut db = pool.get().await?;
 
     let user = users::table
-        .filter(users::id.eq(user_id))
+        .filter(users::username.eq(username))
         .select(User::as_select())
         .first(&mut db)
         .await?;
