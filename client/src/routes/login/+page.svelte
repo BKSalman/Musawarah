@@ -5,7 +5,7 @@
     superValidateSync,
     setMessage,
   } from "sveltekit-superforms/client";
-  import { goto } from "$app/navigation";
+  import { goto, invalidate } from "$app/navigation";
   import type { ErrorResponse } from "bindings/ErrorResponse";
 
   const loginSchema = z.object({
@@ -34,6 +34,7 @@
             const err: ErrorResponse = await res.json();
             setMessage(form, err.error);
           } else {
+            await invalidate("http://localhost:6060/api/v1/users/me");
             await goto("/");
           }
         }
