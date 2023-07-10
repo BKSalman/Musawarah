@@ -340,25 +340,7 @@ pub async fn get_comics(
                     },
                     chapters: chapter_and_pages
                         .into_iter()
-                        .map(|(chapter, pages)| ChapterResponseBrief {
-                            id: chapter.id,
-                            title: chapter.title,
-                            number: chapter.number,
-                            description: chapter.description,
-                            created_at: chapter.created_at,
-                            pages: pages
-                                .into_iter()
-                                .map(|page| ChapterPageResponse {
-                                    id: page.id,
-                                    number: page.number,
-                                    image: ImageResponse {
-                                        content_type: page.content_type,
-                                        path: page.path,
-                                    },
-                                })
-                                .collect(),
-                        })
-                        .collect(),
+                        .map(|(chapter, pages)| chapter.into_chapter_response_brief(pages)),
                     genres: genres
                         .into_iter()
                         .map(|(_genre_mapping, genre)| ComicGenre {
