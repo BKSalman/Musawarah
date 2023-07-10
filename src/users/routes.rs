@@ -52,6 +52,14 @@ pub fn users_router() -> Router<AppState> {
         .route("/:username", get(get_user))
         .route("/", post(create_user))
         .route("/login", post(login))
+        .route("/me", get(me))
+}
+
+// TODO: document
+pub async fn me(
+    auth: AuthExtractor<{ UserRole::User as u32 }>,
+) -> Result<Json<UserResponseBrief>, UsersError> {
+    Ok(Json(auth.current_user))
 }
 
 /// Create User
