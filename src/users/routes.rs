@@ -22,7 +22,7 @@ use uuid::Uuid;
 
 use crate::{
     auth::AuthExtractor,
-    comics::chapters::models::{Chapter, ChapterPage, ChapterPageResponse, ChapterResponseBrief},
+    comics::chapters::models::{Chapter, ChapterPage},
     comics::comic_genres::models::{ComicGenre, Genre, GenreMapping},
     comics::{
         models::{Comic, ComicRating, ComicResponse},
@@ -376,28 +376,11 @@ pub async fn get_user_comics(
                     },
                     title: comic.title,
                     description: comic.description,
-                    rating: average_rating(comic_ratings),
+                    rating: average_rating(&comic_ratings),
                     created_at: comic.created_at.to_string(),
                     chapters: chapters
                         .into_iter()
-                        .map(|chapter| ChapterResponseBrief {
-                            id: chapter.id,
-                            title: chapter.title,
-                            description: chapter.description,
-                            number: chapter.number,
-                            created_at: chapter.created_at,
-                            pages: chapter_pages
-                                .iter()
-                                .map(|page| ChapterPageResponse {
-                                    id: page.id,
-                                    number: page.number,
-                                    image: ImageResponse {
-                                        content_type: page.content_type.clone(),
-                                        path: page.path.clone(),
-                                    },
-                                })
-                                .collect(),
-                        })
+                        .map(|chapter| chapter.into_response_brief(&chapter_pages))
                         .collect(),
                     genres: genres
                         .into_iter()
