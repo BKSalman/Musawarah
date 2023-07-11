@@ -19,6 +19,7 @@
             exa
             fd
             bat
+            lazygit
             
             # database
             postgresql
