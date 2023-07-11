@@ -168,14 +168,20 @@ pub async fn get_comic(
         .await?;
 
     let chapters = Chapter::belonging_to(&comic)
-        .select(Chapter::as_select())
-        .load(&mut db)
+        .load::<Chapter>(&mut db)
         .await?;
 
     let chapter_pages = ChapterPage::belonging_to(&chapters)
         .select(ChapterPage::as_select())
-        .load(&mut db)
+        .load::<ChapterPage>(&mut db)
         .await?;
+
+    let chapters_and_pages = chapter_pages
+        .grouped_by(&chapters)
+        .into_iter()
+        .zip(chapters)
+        .map(|(p, c)| (c, p))
+        .collect::<Vec<(Chapter, Vec<ChapterPage>)>>();
 
     let genres = GenreMapping::belonging_to(&comic)
         .inner_join(comic_genres::table)
@@ -201,9 +207,9 @@ pub async fn get_comic(
         description: comic.description,
         rating: average_rating(comic_ratings),
         created_at: comic.created_at.to_string(),
-        chapters: chapters
+        chapters: chapters_and_pages
             .into_iter()
-            .map(|chapter| chapter.into_response_brief(&chapter_pages))
+            .map(|(chapter, pages)| chapter.into_response_brief(pages))
             .collect(),
         genres: genres
             .into_iter()
