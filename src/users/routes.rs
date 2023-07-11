@@ -335,23 +335,28 @@ pub async fn get_user_comics(
         .load::<Comic>(&mut db)
         .await?;
 
-    let chapters: Vec<Chapter> = Chapter::belonging_to(&comics)
-        .select(Chapter::as_select())
+    let chapters = Chapter::belonging_to(&comics)
         .load::<Chapter>(&mut db)
         .await?;
 
     let chapter_pages = ChapterPage::belonging_to(&chapters)
         .select(ChapterPage::as_select())
-        .load(&mut db)
+        .load::<ChapterPage>(&mut db)
         .await?;
+
+    let chapters_and_pages = chapter_pages
+        .grouped_by(&chapters)
+        .into_iter()
+        .zip(chapters)
+        .map(|(p, c)| (c, p))
+        .collect::<Vec<(Chapter, Vec<ChapterPage>)>>()
+        .grouped_by(&comics);
 
     let genres: Vec<(GenreMapping, Genre)> = GenreMapping::belonging_to(&comics)
         .inner_join(comic_genres::table)
         .select((GenreMapping::as_select(), Genre::as_select()))
         .load::<(GenreMapping, Genre)>(&mut db)
         .await?;
-
-    let chapters = chapters.grouped_by(&comics);
 
     let genres = genres.grouped_by(&comics);
 
@@ -363,8 +368,8 @@ pub async fn get_user_comics(
     let comics_ratings: Vec<Vec<ComicRating>> = comics_ratings.grouped_by(&comics);
 
     let comics: Result<Vec<ComicResponse>, UsersError> =
-        multizip((comics, genres, chapters, comics_ratings))
-            .map(move |(comic, genres, chapters, comic_ratings)| {
+        multizip((comics, genres, chapters_and_pages, comics_ratings))
+            .map(move |(comic, genres, chapter_and_pages, comic_ratings)| {
                 Ok(ComicResponse {
                     id: comic.id,
                     author: UserResponseBrief {
@@ -376,11 +381,11 @@ pub async fn get_user_comics(
                     },
                     title: comic.title,
                     description: comic.description,
-                    rating: average_rating(&comic_ratings),
+                    rating: average_rating(comic_ratings),
                     created_at: comic.created_at.to_string(),
-                    chapters: chapters
+                    chapters: chapter_and_pages
                         .into_iter()
-                        .map(|chapter| chapter.into_response_brief(&chapter_pages))
+                        .map(|(chapter, pages)| chapter.into_response_brief(pages))
                         .collect(),
                     genres: genres
                         .into_iter()
