@@ -199,7 +199,7 @@ pub async fn get_comic(
         },
         title: comic.title,
         description: comic.description,
-        rating: average_rating(&comic_ratings),
+        rating: average_rating(comic_ratings),
         created_at: comic.created_at.to_string(),
         chapters: chapters
             .into_iter()
@@ -309,7 +309,7 @@ pub async fn get_comics(
                     title: comic.title,
                     description: comic.description,
                     created_at: comic.created_at.to_string(),
-                    rating: average_rating(&comic_ratings),
+                    rating: average_rating(comic_ratings),
                     author: UserResponseBrief {
                         id: user.id,
                         displayname: user.displayname,
@@ -319,7 +319,7 @@ pub async fn get_comics(
                     },
                     chapters: chapter_and_pages
                         .into_iter()
-                        .map(|(chapter, pages)| chapter.into_response_brief(&pages))
+                        .map(|(chapter, pages)| chapter.into_response_brief(pages))
                         .collect(),
                     genres: genres
                         .into_iter()

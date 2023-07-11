@@ -37,8 +37,8 @@ pub struct Chapter {
 impl Chapter {
     pub fn into_response(
         self,
-        chapter_pages: &Vec<ChapterPage>,
-        chapter_ratings: &Vec<ChapterRating>,
+        chapter_pages: Vec<ChapterPage>,
+        chapter_ratings: Vec<ChapterRating>,
     ) -> ChapterResponse {
         ChapterResponse {
             id: self.id,
@@ -61,7 +61,7 @@ impl Chapter {
         }
     }
 
-    pub fn into_response_brief(self, chapter_pages: &Vec<ChapterPage>) -> ChapterResponseBrief {
+    pub fn into_response_brief(self, chapter_pages: Vec<ChapterPage>) -> ChapterResponseBrief {
         ChapterResponseBrief {
             id: self.id,
             title: self.title,
