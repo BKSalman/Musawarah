@@ -203,7 +203,7 @@ pub async fn get_comic(
         created_at: comic.created_at.to_string(),
         chapters: chapters
             .into_iter()
-            .map(|chapter| chapter.into_chapter_response_brief(&chapter_pages))
+            .map(|chapter| chapter.into_response_brief(&chapter_pages))
             .collect(),
         genres: genres
             .into_iter()
@@ -319,7 +319,7 @@ pub async fn get_comics(
                     },
                     chapters: chapter_and_pages
                         .into_iter()
-                        .map(|(chapter, pages)| chapter.into_chapter_response_brief(&pages))
+                        .map(|(chapter, pages)| chapter.into_response_brief(&pages))
                         .collect(),
                     genres: genres
                         .into_iter()

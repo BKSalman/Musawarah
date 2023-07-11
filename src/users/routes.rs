@@ -380,7 +380,7 @@ pub async fn get_user_comics(
                     created_at: comic.created_at.to_string(),
                     chapters: chapters
                         .into_iter()
-                        .map(|chapter| chapter.into_chapter_response_brief(&chapter_pages))
+                        .map(|chapter| chapter.into_response_brief(&chapter_pages))
                         .collect(),
                     genres: genres
                         .into_iter()

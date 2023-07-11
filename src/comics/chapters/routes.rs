@@ -108,7 +108,7 @@ pub async fn create_chapter(
         .get_result::<Chapter>(&mut db)
         .await?;
 
-    Ok(Json(chapter.into_chapter_response_brief(&vec![])))
+    Ok(Json(chapter.into_response_brief(&vec![])))
 }
 
 /// Create a chapter page
@@ -340,7 +340,7 @@ pub async fn get_chapter(
         .load::<ChapterRating>(&mut db)
         .await?;
 
-    let chapter = chapter.into_chapter_response(&chapter_pages, &chapter_ratings);
+    let chapter = chapter.into_response(&chapter_pages, &chapter_ratings);
 
     Ok(Json(chapter))
 }
@@ -555,9 +555,7 @@ pub async fn get_chapters(
     let chapters_ratings = chapters_ratings.grouped_by(&chapters);
 
     let chapters = multizip((chapters, chapter_pages, chapters_ratings))
-        .map(|(chapter, pages, chapter_ratings)| {
-            chapter.into_chapter_response(&pages, &chapter_ratings)
-        })
+        .map(|(chapter, pages, chapter_ratings)| chapter.into_response(&pages, &chapter_ratings))
         .collect();
 
     Ok(Json(chapters))
