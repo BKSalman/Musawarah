@@ -13,6 +13,7 @@ use crate::{
     common::models::ImageResponse,
     schema::{chapter_pages, chapter_ratings, comic_chapters},
     users::models::User,
+    utils::average_rating,
     Rating,
 };
 
@@ -31,6 +32,58 @@ pub struct Chapter {
     pub is_visible: bool,
     pub user_id: Uuid,
     pub comic_id: Uuid,
+}
+
+impl Chapter {
+    pub fn into_chapter_response(
+        self,
+        chapter_pages: &Vec<ChapterPage>,
+        chapter_ratings: &Vec<ChapterRating>,
+    ) -> ChapterResponse {
+        ChapterResponse {
+            id: self.id,
+            title: self.title,
+            number: self.number,
+            description: self.description,
+            created_at: self.created_at,
+            pages: chapter_pages
+                .iter()
+                .map(|page| ChapterPageResponse {
+                    id: page.id,
+                    number: page.number,
+                    image: ImageResponse {
+                        content_type: page.content_type.clone(),
+                        path: page.path.clone(),
+                    },
+                })
+                .collect(),
+            rating: average_rating(chapter_ratings),
+        }
+    }
+
+    pub fn into_chapter_response_brief(
+        self,
+        chapter_pages: &Vec<ChapterPage>,
+    ) -> ChapterResponseBrief {
+        ChapterResponseBrief {
+            id: self.id,
+            title: self.title,
+            number: self.number,
+            description: self.description,
+            created_at: self.created_at,
+            pages: chapter_pages
+                .iter()
+                .map(|page| ChapterPageResponse {
+                    id: page.id,
+                    number: page.number,
+                    image: ImageResponse {
+                        content_type: page.content_type.clone(),
+                        path: page.path.clone(),
+                    },
+                })
+                .collect(),
+        }
+    }
 }
 
 #[derive(Insertable, Queryable, Selectable, Identifiable, Associations, Debug, Clone)]

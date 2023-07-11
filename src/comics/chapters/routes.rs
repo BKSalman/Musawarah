@@ -35,7 +35,6 @@ use crate::{
     s3::{interface::Storage, Upload},
     schema::{chapter_pages, chapter_ratings, comic_chapters},
     users::models::UserRole,
-    utils::average_rating,
     AppState, SortingOrder,
 };
 
@@ -109,14 +108,7 @@ pub async fn create_chapter(
         .get_result::<Chapter>(&mut db)
         .await?;
 
-    Ok(Json(ChapterResponseBrief {
-        id: chapter.id,
-        title: chapter.title,
-        number: chapter.number,
-        description: chapter.description,
-        created_at: chapter.created_at,
-        pages: vec![],
-    }))
+    Ok(Json(chapter.into_chapter_response_brief(&vec![])))
 }
 
 /// Create a chapter page
@@ -344,31 +336,11 @@ pub async fn get_chapter(
         .load::<ChapterPage>(&mut db)
         .await?;
 
-    let chapter_pages = chapter_pages
-        .into_iter()
-        .map(|chapter_page| ChapterPageResponse {
-            id: chapter_page.id,
-            number: chapter_page.number,
-            image: ImageResponse {
-                content_type: chapter_page.content_type,
-                path: chapter_page.path,
-            },
-        })
-        .collect();
-
     let chapter_ratings = ChapterRating::belonging_to(&chapter)
         .load::<ChapterRating>(&mut db)
         .await?;
 
-    let chapter = ChapterResponse {
-        id: chapter.id,
-        title: chapter.title,
-        number: chapter.number,
-        description: chapter.description,
-        rating: average_rating(chapter_ratings),
-        pages: chapter_pages,
-        created_at: chapter.created_at,
-    };
+    let chapter = chapter.into_chapter_response(&chapter_pages, &chapter_ratings);
 
     Ok(Json(chapter))
 }
@@ -583,24 +555,8 @@ pub async fn get_chapters(
     let chapters_ratings = chapters_ratings.grouped_by(&chapters);
 
     let chapters = multizip((chapters, chapter_pages, chapters_ratings))
-        .map(|(chapter, pages, chapter_ratings)| ChapterResponse {
-            id: chapter.id,
-            title: chapter.title,
-            number: chapter.number,
-            description: chapter.description,
-            rating: average_rating(chapter_ratings),
-            created_at: chapter.created_at,
-            pages: pages
-                .into_iter()
-                .map(|page| ChapterPageResponse {
-                    id: page.id,
-                    number: page.number,
-                    image: ImageResponse {
-                        content_type: page.content_type,
-                        path: page.path,
-                    },
-                })
-                .collect(),
+        .map(|(chapter, pages, chapter_ratings)| {
+            chapter.into_chapter_response(&pages, &chapter_ratings)
         })
         .collect();
 

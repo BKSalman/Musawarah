@@ -15,10 +15,9 @@ use uuid::Uuid;
 
 use crate::{
     auth::AuthExtractor,
-    comics::chapters::models::{Chapter, ChapterResponseBrief},
+    comics::chapters::models::Chapter,
     comics::comic_genres::models::{ComicGenre, Genre, GenreMapping},
     comics::{models::NewComicRating, SortingOrder},
-    common::models::ImageResponse,
     schema::{comic_genres, comic_genres_mapping, comic_ratings, comics, users},
     users::models::{User, UserResponseBrief, UserRole},
     utils::average_rating,
@@ -26,10 +25,7 @@ use crate::{
 };
 
 use super::{
-    chapters::{
-        models::{ChapterPage, ChapterPageResponse},
-        routes::chapters_router,
-    },
+    chapters::{models::ChapterPage, routes::chapters_router},
     comic_comments::routes::comic_comments_router,
     comic_genres::routes::comic_genres_router,
     models::{Comic, ComicRating, ComicResponse, CreateComic, UpdateComic},
@@ -203,28 +199,11 @@ pub async fn get_comic(
         },
         title: comic.title,
         description: comic.description,
-        rating: average_rating(comic_ratings),
+        rating: average_rating(&comic_ratings),
         created_at: comic.created_at.to_string(),
         chapters: chapters
             .into_iter()
-            .map(|chapter| ChapterResponseBrief {
-                id: chapter.id,
-                title: chapter.title,
-                number: chapter.number,
-                description: chapter.description,
-                created_at: chapter.created_at,
-                pages: chapter_pages
-                    .iter()
-                    .map(|page| ChapterPageResponse {
-                        id: page.id,
-                        number: page.number,
-                        image: ImageResponse {
-                            content_type: page.content_type.clone(),
-                            path: page.path.clone(),
-                        },
-                    })
-                    .collect(),
-            })
+            .map(|chapter| chapter.into_chapter_response_brief(&chapter_pages))
             .collect(),
         genres: genres
             .into_iter()
@@ -330,7 +309,7 @@ pub async fn get_comics(
                     title: comic.title,
                     description: comic.description,
                     created_at: comic.created_at.to_string(),
-                    rating: average_rating(comic_ratings),
+                    rating: average_rating(&comic_ratings),
                     author: UserResponseBrief {
                         id: user.id,
                         displayname: user.displayname,
@@ -340,7 +319,8 @@ pub async fn get_comics(
                     },
                     chapters: chapter_and_pages
                         .into_iter()
-                        .map(|(chapter, pages)| chapter.into_chapter_response_brief(pages)),
+                        .map(|(chapter, pages)| chapter.into_chapter_response_brief(&pages))
+                        .collect(),
                     genres: genres
                         .into_iter()
                         .map(|(_genre_mapping, genre)| ComicGenre {
