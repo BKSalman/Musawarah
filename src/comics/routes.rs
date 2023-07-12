@@ -15,10 +15,9 @@ use uuid::Uuid;
 
 use crate::{
     auth::AuthExtractor,
-    comics::chapters::models::{Chapter, ChapterResponseBrief},
+    comics::chapters::models::Chapter,
     comics::comic_genres::models::{ComicGenre, Genre, GenreMapping},
     comics::{models::NewComicRating, SortingOrder},
-    common::models::ImageResponse,
     schema::{comic_genres, comic_genres_mapping, comic_ratings, comics, users},
     users::models::{User, UserResponseBrief, UserRole},
     utils::average_rating,
@@ -26,10 +25,7 @@ use crate::{
 };
 
 use super::{
-    chapters::{
-        models::{ChapterPage, ChapterPageResponse},
-        routes::chapters_router,
-    },
+    chapters::{models::ChapterPage, routes::chapters_router},
     comic_comments::routes::comic_comments_router,
     comic_genres::routes::comic_genres_router,
     models::{Comic, ComicRating, ComicResponse, CreateComic, UpdateComic},
@@ -172,14 +168,20 @@ pub async fn get_comic(
         .await?;
 
     let chapters = Chapter::belonging_to(&comic)
-        .select(Chapter::as_select())
-        .load(&mut db)
+        .load::<Chapter>(&mut db)
         .await?;
 
     let chapter_pages = ChapterPage::belonging_to(&chapters)
         .select(ChapterPage::as_select())
-        .load(&mut db)
+        .load::<ChapterPage>(&mut db)
         .await?;
+
+    let chapters_and_pages = chapter_pages
+        .grouped_by(&chapters)
+        .into_iter()
+        .zip(chapters)
+        .map(|(p, c)| (c, p))
+        .collect::<Vec<(Chapter, Vec<ChapterPage>)>>();
 
     let genres = GenreMapping::belonging_to(&comic)
         .inner_join(comic_genres::table)
@@ -205,26 +207,9 @@ pub async fn get_comic(
         description: comic.description,
         rating: average_rating(comic_ratings),
         created_at: comic.created_at.to_string(),
-        chapters: chapters
+        chapters: chapters_and_pages
             .into_iter()
-            .map(|chapter| ChapterResponseBrief {
-                id: chapter.id,
-                title: chapter.title,
-                number: chapter.number,
-                description: chapter.description,
-                created_at: chapter.created_at,
-                pages: chapter_pages
-                    .iter()
-                    .map(|page| ChapterPageResponse {
-                        id: page.id,
-                        number: page.number,
-                        image: ImageResponse {
-                            content_type: page.content_type.clone(),
-                            path: page.path.clone(),
-                        },
-                    })
-                    .collect(),
-            })
+            .map(|(chapter, pages)| chapter.into_response_brief(pages))
             .collect(),
         genres: genres
             .into_iter()
@@ -296,12 +281,16 @@ pub async fn get_comics(
 
     let chapter_pages = ChapterPage::belonging_to(&chapters)
         .select(ChapterPage::as_select())
-        .load(&mut db)
+        .load::<ChapterPage>(&mut db)
         .await?;
 
-    let chapters_pages = chapter_pages.grouped_by(&chapters);
-
-    let chapters = chapters.grouped_by(&comics);
+    let chapters_and_pages = chapter_pages
+        .grouped_by(&chapters)
+        .into_iter()
+        .zip(chapters)
+        .map(|(p, c)| (c, p))
+        .collect::<Vec<(Chapter, Vec<ChapterPage>)>>()
+        .grouped_by(&comics);
 
     let genres: Vec<(GenreMapping, Genre)> = GenreMapping::belonging_to(&comics)
         .inner_join(comic_genres::table)
@@ -318,61 +307,36 @@ pub async fn get_comics(
 
     let comics_ratings: Vec<Vec<ComicRating>> = comics_ratings.grouped_by(&comics);
 
-    let comics: Result<Vec<ComicResponse>, ComicsError> = multizip((
-        users,
-        comics,
-        genres,
-        chapters,
-        chapters_pages,
-        comics_ratings,
-    ))
-    .map(
-        |(user, comic, genres, chapters, chapter_pages, comic_ratings)| {
-            Ok(ComicResponse {
-                id: comic.id,
-                title: comic.title,
-                description: comic.description,
-                created_at: comic.created_at.to_string(),
-                rating: average_rating(comic_ratings),
-                author: UserResponseBrief {
-                    id: user.id,
-                    displayname: user.displayname,
-                    username: user.username,
-                    email: user.email,
-                    role: user.role,
-                },
-                chapters: chapters
-                    .into_iter()
-                    .map(|chapter| ChapterResponseBrief {
-                        id: chapter.id,
-                        title: chapter.title,
-                        number: chapter.number,
-                        description: chapter.description,
-                        created_at: chapter.created_at,
-                        pages: chapter_pages
-                            .iter()
-                            .map(|page| ChapterPageResponse {
-                                id: page.id,
-                                number: page.number,
-                                image: ImageResponse {
-                                    content_type: page.content_type.clone(),
-                                    path: page.path.clone(),
-                                },
-                            })
-                            .collect(),
-                    })
-                    .collect(),
-                genres: genres
-                    .into_iter()
-                    .map(|(_genre_mapping, genre)| ComicGenre {
-                        id: genre.id,
-                        name: genre.name,
-                    })
-                    .collect(),
+    let comics: Result<Vec<ComicResponse>, ComicsError> =
+        multizip((users, comics, genres, chapters_and_pages, comics_ratings))
+            .map(|(user, comic, genres, chapter_and_pages, comic_ratings)| {
+                Ok(ComicResponse {
+                    id: comic.id,
+                    title: comic.title,
+                    description: comic.description,
+                    created_at: comic.created_at.to_string(),
+                    rating: average_rating(comic_ratings),
+                    author: UserResponseBrief {
+                        id: user.id,
+                        displayname: user.displayname,
+                        username: user.username,
+                        email: user.email,
+                        role: user.role,
+                    },
+                    chapters: chapter_and_pages
+                        .into_iter()
+                        .map(|(chapter, pages)| chapter.into_response_brief(pages))
+                        .collect(),
+                    genres: genres
+                        .into_iter()
+                        .map(|(_genre_mapping, genre)| ComicGenre {
+                            id: genre.id,
+                            name: genre.name,
+                        })
+                        .collect(),
+                })
             })
-        },
-    )
-    .collect();
+            .collect();
 
     Ok(Json(comics?))
 }
