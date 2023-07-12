@@ -6,7 +6,5 @@ export const load = (async ({ fetch }) => {
     credentials: "include",
   });
   const user: UserResponseBrief | undefined = res.status !== 200 ? undefined : await res.json();
-  return {
-    user: user
-  };
+  return { user };
 }) satisfies LayoutServerLoad;

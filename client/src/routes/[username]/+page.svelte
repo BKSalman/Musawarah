@@ -16,7 +16,7 @@
             <a href={`/${user.username}/${comic.id}`}>
                 <div class="comic">
                     <h2 class="comic-title">{comic.title}</h2>
-                    <p>{comic.description ?? "asdlfkjasdf"}</p>
+                    <p>{comic.description ?? ""}</p>
                 </div>
             </a>
         {/each}

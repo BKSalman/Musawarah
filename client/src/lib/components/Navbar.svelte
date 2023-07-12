@@ -16,7 +16,7 @@
             <a href={`/${user.username}`}><div class="user-menu" /></a>
         {:else}
             <a href="/login" class="button">Log In</a>
-            <a href="/register" class="button">Sign Up</a>
+            <a href="/register" class="button">Register</a>
         {/if}
     </div>
 </nav>
