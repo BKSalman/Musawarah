@@ -55,11 +55,18 @@ pub fn users_router() -> Router<AppState> {
         .route("/me", get(me))
 }
 
-// TODO: document
-pub async fn me(
-    auth: AuthExtractor<{ UserRole::User as u32 }>,
-) -> Result<Json<UserResponseBrief>, UsersError> {
-    Ok(Json(auth.current_user))
+/// get user by cookie
+#[utoipa::path(
+    get,
+    path = "/api/v1/users/me",
+    responses(
+        (status = 200, description = "Caller authorized, returns user info", body = UserResponseBrief),
+        (status = StatusCode::UNAUTHORIZED, description = "Caller unauthorized"),
+    ),
+    tag = "Users API"
+)]
+pub async fn me(auth: AuthExtractor<{ UserRole::User as u32 }>) -> Json<UserResponseBrief> {
+    Json(auth.current_user)
 }
 
 /// Create User
