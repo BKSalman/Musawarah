@@ -1,9 +1,8 @@
 <script lang="ts">
-    import type { UserResponseBrief } from "bindings/UserResponseBrief";
     import { Hamburger } from "svelte-hamburgers";
+    import { currentUser } from "../../routes/stores";
 
     export let open = false;
-    export let user: UserResponseBrief | undefined;
 </script>
 
 <nav>
@@ -12,8 +11,8 @@
         <a href="/"><div class="logo" /></a>
     </div>
     <div>
-        {#if user}
-            <a href={`/${user.username}`}><div class="user-menu" /></a>
+        {#if $currentUser}
+            <a href={`/${$currentUser.username}`}><div class="user-menu" /></a>
         {:else}
             <a href="/login" class="button">Log In</a>
             <a href="/register" class="button">Register</a>
