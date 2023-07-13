@@ -94,21 +94,23 @@ impl<const USER_ROLE: u32> FromRequestParts<AppState> for AuthExtractor<USER_ROL
             remove_cookie_on_fail = remove_cookie_on_fail.domain("localhost");
         }
 
-        let session_id = cookies
-            .private(key)
-            .get(SESSION_COOKIE_NAME)
-            .ok_or_else(|| {
+        let session_id = match cookies.private(key).get(SESSION_COOKIE_NAME) {
+            None => {
                 tracing::error!("auth-extractor: failed to get session_id cookie");
-                cookies.remove(remove_cookie_on_fail.clone().finish());
-                AuthError::InvalidSession
-            })?;
+                cookies.remove(remove_cookie_on_fail.finish());
+                return Err(AuthError::InvalidSession);
+            }
+            Some(id) => id,
+        };
 
-        let session_id = Uuid::parse_str(session_id.value()).map_err(|e| {
-            tracing::error!("auth-extractor: invalid session_id: {e}");
-            // FIXME: why do I need to clone
-            cookies.remove(remove_cookie_on_fail.clone().finish());
-            AuthError::InvalidSession
-        })?;
+        let session_id = match Uuid::parse_str(session_id.value()) {
+            Err(e) => {
+                tracing::error!("auth-extractor: invalid session_id: {e}");
+                cookies.remove(remove_cookie_on_fail.finish());
+                return Err(AuthError::InvalidSession);
+            }
+            Ok(id) => id,
+        };
 
         let mut query = sessions::table
             .inner_join(users::table)
@@ -138,7 +140,7 @@ impl<const USER_ROLE: u32> FromRequestParts<AppState> for AuthExtractor<USER_ROL
             .select((User::as_select(), Session::as_select()))
             .get_result::<(User, Session)>(&mut db)
             .await else {
-            cookies.remove(remove_cookie_on_fail.clone().finish());
+            cookies.remove(remove_cookie_on_fail.finish());
             diesel::delete(sessions::table.filter(sessions::id.eq(session_id))).execute(&mut db).await?;
             return Err(AuthError::InvalidSession);
         };
