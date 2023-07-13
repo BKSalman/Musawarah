@@ -52,6 +52,21 @@ pub fn users_router() -> Router<AppState> {
         .route("/:username", get(get_user))
         .route("/", post(create_user))
         .route("/login", post(login))
+        .route("/me", get(me))
+}
+
+/// get user by cookie
+#[utoipa::path(
+    get,
+    path = "/api/v1/users/me",
+    responses(
+        (status = 200, description = "Caller authorized, returns user info", body = UserResponseBrief),
+        (status = StatusCode::UNAUTHORIZED, description = "Caller unauthorized"),
+    ),
+    tag = "Users API"
+)]
+pub async fn me(auth: AuthExtractor<{ UserRole::User as u32 }>) -> Json<UserResponseBrief> {
+    Json(auth.current_user)
 }
 
 /// Create User

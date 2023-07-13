@@ -1,7 +1,9 @@
 <script lang="ts">
     import Navbar from "$lib/components/Navbar.svelte";
     import Sidebar from "$lib/components/Sidebar.svelte";
-
+    import { currentUser } from "./stores";
+    export let data;
+    currentUser.set(data.user);
     let open = false;
 </script>
 

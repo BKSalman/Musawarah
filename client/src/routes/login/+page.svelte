@@ -7,6 +7,7 @@
   } from "sveltekit-superforms/client";
   import { goto } from "$app/navigation";
   import type { ErrorResponse } from "bindings/ErrorResponse";
+  import { currentUser } from "../stores";
 
   const loginSchema = z.object({
     email: z.string().email(),
@@ -34,6 +35,7 @@
             const err: ErrorResponse = await res.json();
             setMessage(form, err.error);
           } else {
+            await currentUser.refresh();
             await goto("/");
           }
         }
