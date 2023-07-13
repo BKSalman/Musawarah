@@ -247,6 +247,7 @@ pub async fn get_comics(
     let mut comics_query = comics::table
         .inner_join(users::table)
         .left_join(comic_ratings::table)
+        // PERF:: find a way to do the left join only when there's a genre_filter
         .left_join(comic_genres_mapping::table.inner_join(comic_genres::table))
         .filter(comics::id.gt(params.min_id))
         .filter(comics::id.lt(params.max_id))
@@ -268,6 +269,7 @@ pub async fn get_comics(
     }
 
     let (comics, users): (Vec<Comic>, Vec<User>) = comics_query
+        .distinct()
         .limit(10)
         .select((Comic::as_select(), User::as_select()))
         .load::<(Comic, User)>(&mut db)
