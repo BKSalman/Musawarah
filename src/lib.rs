@@ -80,8 +80,9 @@ pub static COOKIES_SECRET: OnceCell<Key> = OnceCell::new();
         comics::comic_genres::routes::create_genre,
         comics::comic_genres::routes::update_genre,
         comics::comic_genres::routes::delete_genre,
-        // comics::comic_comments::routes::get_comments,
+        comics::comic_comments::routes::get_comments,
         comics::comic_comments::routes::create_comment,
+        comics::comic_comments::routes::delete_comment,
     ),
     components(
         schemas(common::models::ImageResponse),
