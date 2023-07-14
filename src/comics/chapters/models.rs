@@ -47,13 +47,13 @@ impl Chapter {
             description: self.description,
             created_at: self.created_at,
             pages: chapter_pages
-                .iter()
+                .into_iter()
                 .map(|page| ChapterPageResponse {
                     id: page.id,
                     number: page.number,
                     image: ImageResponse {
-                        content_type: page.content_type.clone(),
-                        path: page.path.clone(),
+                        content_type: page.content_type,
+                        path: page.path,
                     },
                 })
                 .collect(),
@@ -69,13 +69,13 @@ impl Chapter {
             description: self.description,
             created_at: self.created_at,
             pages: chapter_pages
-                .iter()
+                .into_iter()
                 .map(|page| ChapterPageResponse {
                     id: page.id,
                     number: page.number,
                     image: ImageResponse {
-                        content_type: page.content_type.clone(),
-                        path: page.path.clone(),
+                        content_type: page.content_type,
+                        path: page.path,
                     },
                 })
                 .collect(),
