@@ -3,3 +3,4 @@
 bindings
 config.toml
 logs
+.direnv
