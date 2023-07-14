@@ -45,16 +45,15 @@ const fill_children = (comment: ComicCommentResponse, comments: ComicCommentResp
         return;
     }
 
-    comment.child_comments = comment.child_comments?.map((child_id) => {
+    comment.child_comments = comment.child_comments_ids?.map((child_id) => {
         const child_comment = get_comment_by_id(child_id, comments);
 
         if (child_comment) {
-            console.log(child_comment);
             fill_children(child_comment, comments, limit - 1);
 
             return child_comment;
         }
-    });
+    }) as ComicCommentResponse[];
 }
 
 const get_comment_by_id = (id: string, comments: ComicCommentResponse[]): ComicCommentResponse | undefined => {
