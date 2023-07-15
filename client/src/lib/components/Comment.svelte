@@ -4,11 +4,12 @@
     import { faAngleDown, faMessage } from "@fortawesome/free-solid-svg-icons";
     import Fa from "svelte-fa";
     import { currentUser } from "../../routes/stores";
+    import { fly } from "svelte/transition";
 
     export let comment: ComicCommentResponse;
     export let indent = 0;
     let openChildren = false;
-    let openCommentBox = false;
+    let openReplyBox = false;
 
     async function sendComment(e: SubmitEvent, parent_comment_id: string | null) {
         const form = new FormData(e.target as HTMLFormElement);
@@ -42,23 +43,29 @@
     }
 </script>
 
-<div style="padding-left: {indent}rem" class="comment">
+<div transition:fly|global={{ y: -10, duration: 100 }} class="comment" style="padding-left: {indent}rem">
     <div class="">{comment.user.username}</div>
     <div class="">{comment.content}</div>
-    <button class="comment-box-collapse-button" on:click={() => openCommentBox = !openCommentBox}><Fa size="1.5x" icon={faMessage} /></button>
-    {#if openCommentBox}
+    <button class="reply-box-collapse-button" on:click={() => openReplyBox = !openReplyBox}>
+        <Fa size="1.5x" icon={faMessage} />
+    </button>
+    {#if openReplyBox}
         {#if $currentUser}
-            <form class="new-reply" on:submit|preventDefault={(e) => sendComment(e, comment.id)}>
+            <form transition:fly|global={{ y: -10, duration: 100 }} class="new-reply"
+                on:submit|preventDefault={(e) => sendComment(e, comment.id)}>
+
                 <input type="text" name="comment" placeholder="Add a reply">
                 <button type="submit">send</button>
             </form>
         {:else}
-            <h3><a href="/login">need to be logged in</a></h3>
+            <h3 transition:fly|global={{ y: 10, duration: 200 }}><a href="/login">need to be logged in</a></h3>
         {/if}
     {/if}
     {#if comment.child_comments.length > 0}
         <div class="children">
-            <button class="children-collapse-button" on:click={() => openChildren = !openChildren}><Fa size="1.5x" icon={faAngleDown} /></button>
+            <button class="children-collapse-button" on:click={() => openChildren = !openChildren}>
+                <Fa size="1.5x" icon={faAngleDown} />
+            </button>
             {#if openChildren}
                 {#each comment.child_comments || [] as child}
                     <svelte:self comment={child} indent={indent + 0.1}/>
@@ -84,7 +91,7 @@
     border: none;
     cursor: pointer;
 }
-.comment-box-collapse-button {
+.reply-box-collapse-button {
     background: none;
     border: none;
     cursor: pointer;
