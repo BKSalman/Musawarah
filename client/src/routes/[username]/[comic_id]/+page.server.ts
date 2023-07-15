@@ -41,8 +41,10 @@ export const load = (async ({ fetch, params, cookies}) => {
 
 const fill_children = (comment: ComicCommentResponse, comments: ComicCommentResponse[], limit: number) => {
     if (limit <= 0) {
-        comment.child_comments = [];
-        return;
+        // limit is removed for now
+        
+        // comment.child_comments = [];
+        // return;
     }
 
     comment.child_comments = comment.child_comments_ids?.map((child_id) => {

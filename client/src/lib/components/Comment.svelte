@@ -1,9 +1,14 @@
 <script lang="ts">
     import { goto } from "$app/navigation";
     import type { ComicCommentResponse } from "bindings/ComicCommentResponse";
+    import { faAngleDown, faMessage } from "@fortawesome/free-solid-svg-icons";
+    import Fa from "svelte-fa";
+    import { currentUser } from "../../routes/stores";
 
     export let comment: ComicCommentResponse;
     export let indent = 0;
+    let openChildren = false;
+    let openCommentBox = false;
 
     async function sendComment(e: SubmitEvent, parent_comment_id: string | null) {
         const form = new FormData(e.target as HTMLFormElement);
@@ -30,8 +35,8 @@
             // TODO: add message to the user that they need to log in
             await goto("/login");
         } else {
-            comment.child_comments.push(await res.json() as ComicCommentResponse)
-            // just to force it to refresh
+            comment.child_comments.push(await res.json() as ComicCommentResponse);
+            // force it to refresh
             comment = comment;
         }
     }
@@ -40,15 +45,27 @@
 <div style="padding-left: {indent}rem" class="comment">
     <div class="">{comment.user.username}</div>
     <div class="">{comment.content}</div>
-    <form class="new-reply" on:submit|preventDefault={(e) => sendComment(e, comment.id)}>
-        <input type="text" name="comment" placeholder="Add a reply">
-        <button type="submit">send</button>
-    </form>
-    <div class="children">
-        {#each comment.child_comments || [] as child}
-            <svelte:self comment={child} indent={indent + 0.1}/>
-        {/each}
-    </div>
+    <button class="comment-box-collapse-button" on:click={() => openCommentBox = !openCommentBox}><Fa size="1.5x" icon={faMessage} /></button>
+    {#if openCommentBox}
+        {#if $currentUser}
+            <form class="new-reply" on:submit|preventDefault={(e) => sendComment(e, comment.id)}>
+                <input type="text" name="comment" placeholder="Add a reply">
+                <button type="submit">send</button>
+            </form>
+        {:else}
+            <h3><a href="/login">need to be logged in</a></h3>
+        {/if}
+    {/if}
+    {#if comment.child_comments.length > 0}
+        <div class="children">
+            <button class="children-collapse-button" on:click={() => openChildren = !openChildren}><Fa size="1.5x" icon={faAngleDown} /></button>
+            {#if openChildren}
+                {#each comment.child_comments || [] as child}
+                    <svelte:self comment={child} indent={indent + 0.1}/>
+                {/each}
+            {/if}
+        </div>
+    {/if}
 </div>
 
 <style>
@@ -61,5 +78,15 @@
     margin-bottom: 10px;
     border-radius: 5px;
     width: 90%;
+}
+.children-collapse-button {
+    background: none;
+    border: none;
+    cursor: pointer;
+}
+.comment-box-collapse-button {
+    background: none;
+    border: none;
+    cursor: pointer;
 }
 </style>

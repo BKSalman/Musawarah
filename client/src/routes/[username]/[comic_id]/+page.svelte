@@ -5,10 +5,15 @@
     import { currentUser } from '../../stores';
     import { goto } from '$app/navigation';
     import type { ComicCommentResponse } from 'bindings/ComicCommentResponse';
+    import { faMessage } from '@fortawesome/free-solid-svg-icons';
+    import Fa from 'svelte-fa';
 
     export let data: PageServerData;
 
+    let open = false;
+
     let { comic, comments } = data;
+
     async function sendComment(e: SubmitEvent, parent_comment_id: string | null, comic_id: string) {
         const form = new FormData(e.target as HTMLFormElement);
 
@@ -35,12 +40,11 @@
             await goto("/login");
         } else {
             comments.unshift(await res.json() as ComicCommentResponse)
-            // just to force it to refresh
+            // force it to refresh
             comments = comments;
         }
     }
 </script>
-
 
 <div class="comic-container">
     <div class="comic">
@@ -50,6 +54,9 @@
         {/if}
     </div>
         <span>chapters:</span>
+        {#if $currentUser && $currentUser.id == comic.author.id}
+            <button>New chapter</button>
+        {/if}
         <div class="chapters">
             {#each comic.chapters as chapter}
                 <ChapterThumbnail {chapter} />
@@ -62,6 +69,8 @@
                 <input type="text" name="comment" placeholder="Add a comment">
                 <button type="submit">send</button>
             </form>
+        {:else}
+            <h3><a href="/login">need to be logged in</a></h3>
         {/if}
         {#each comments as comment}
             <Comment {comment}/>
