@@ -97,6 +97,8 @@ pub async fn create_chapter(
         title: payload.title,
         description: payload.description,
         created_at: Utc::now(),
+        poster_path: None,
+        poster_content_type: None,
         updated_at: None,
         published_at: None,
         is_visible: false,

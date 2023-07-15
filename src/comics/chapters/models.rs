@@ -26,6 +26,8 @@ pub struct Chapter {
     pub title: Option<String>,
     pub description: Option<String>,
     pub number: i32,
+    pub poster_path: Option<String>,
+    pub poster_content_type: Option<String>,
     pub created_at: DateTime<chrono::Utc>,
     pub updated_at: Option<DateTime<chrono::Utc>>,
     pub published_at: Option<DateTime<chrono::Utc>>,

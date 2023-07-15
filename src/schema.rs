@@ -37,6 +37,8 @@ diesel::table! {
         title -> Nullable<Text>,
         description -> Nullable<Text>,
         number -> Int4,
+        poster_path -> Nullable<Text>,
+        poster_content_type -> Nullable<Text>,
         created_at -> Timestamptz,
         updated_at -> Nullable<Timestamptz>,
         published_at -> Nullable<Timestamptz>,

@@ -4,6 +4,8 @@ CREATE TABLE IF NOT EXISTS comic_chapters (
     title TEXT,
     description TEXT,
     number INTEGER NOT NULL,
+    poster_path TEXT,
+    poster_content_type TEXT,
     created_at TIMESTAMPTZ NOT NULL,
     updated_at TIMESTAMPTZ,
     published_at TIMESTAMPTZ,
