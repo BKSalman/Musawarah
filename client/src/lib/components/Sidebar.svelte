@@ -33,6 +33,8 @@
         transition: ease-out 200ms;
         width: 60px;
         overflow: hidden;
+        margin-top: 3em;
+        position: fixed;
     }
 
     .expanded {

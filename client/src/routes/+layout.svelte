@@ -8,19 +8,22 @@
 </script>
 
 <Navbar bind:open />
+<Sidebar {open} />
 <div class="layout-container">
-    <Sidebar {open} />
     <slot />
 </div>
-
-<br />
-
 <footer>footer</footer>
 
 <style>
     .layout-container {
-        display: grid;
-        height: 100%;
-        grid-template-columns: 1fr 7fr;
+        margin-left: 60px;
+        padding: 16px;
+        flex: 1;
+    }
+
+    footer {
+        background-color: darkgray;
+        padding: 20px;
+        text-align: center;
     }
 </style>
