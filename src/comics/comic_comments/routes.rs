@@ -180,13 +180,6 @@ pub async fn create_comment(
                     .await?;
 
                 if let Some(parent_comment_id) = payload.parent_comment_id {
-                    let count = comic_comments_mapping::table
-                        .filter(comic_comments_mapping::parent_comment_id.eq(parent_comment_id))
-                        .select(diesel::dsl::count(comic_comments_mapping::child_comment_id))
-                        .get_result::<i64>(transaction)
-                        .await?;
-
-                    tracing::debug!("count: {count}");
 
                     diesel::insert_into(comic_comments_mapping::table)
                         .values((
