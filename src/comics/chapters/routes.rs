@@ -72,7 +72,7 @@ pub fn chapters_router() -> Router<AppState> {
     path = "/api/v1/comics/:comic_id/chapters",
     request_body(content = CreateChapter, content_type = "application/json"),
     responses(
-        (status = 200, description = "Chapter successfully created", body = UserResponse),
+        (status = 200, description = "Chapter successfully created", body = ChapterResponseBrief),
         (status = StatusCode::CONFLICT, description = "Chapter number conflicts with an already existing one", body = ErrorResponse),
         (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorResponse),
     ),

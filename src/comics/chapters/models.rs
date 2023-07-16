@@ -153,8 +153,8 @@ pub struct ChapterResponseBrief {
     pub title: Option<String>,
     pub number: i32,
     pub description: Option<String>,
-    pub created_at: DateTime<chrono::Utc>,
     pub pages: Vec<ChapterPageResponse>,
+    pub created_at: DateTime<chrono::Utc>,
 }
 
 #[derive(ToSchema)]
