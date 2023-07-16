@@ -84,34 +84,26 @@ pub async fn get_comments(
         comment_mappings_by_children,
     ))
     .map(
-        |(comment, user, comment_parent_mapping, comment_children_mapping)| {
-            let comment_mapping = if comment_parent_mapping.is_empty() {
-                None
-            } else {
-                Some(
-                    comment_parent_mapping
-                        .iter()
-                        .map(|m| m.child_comment_id)
-                        .collect(),
-                )
-            };
-
-            ComicCommentResponse {
-                id: comment.id,
-                content: comment.content,
-                user: UserResponseBrief {
-                    id: user.id,
-                    displayname: user.displayname,
-                    username: user.username,
-                    email: user.email,
-                    role: user.role,
-                },
-                parent_comment: comment_children_mapping
-                    .iter()
-                    .nth(0)
-                    .map(|m| m.parent_comment_id),
-                child_comments: comment_mapping,
-            }
+        |(comment, user, comment_parent_mapping, comment_children_mapping)| ComicCommentResponse {
+            id: comment.id,
+            comic_id: comic.id,
+            content: comment.content,
+            user: UserResponseBrief {
+                id: user.id,
+                displayname: user.displayname,
+                username: user.username,
+                email: user.email,
+                role: user.role,
+            },
+            parent_comment: comment_children_mapping
+                .iter()
+                .nth(0)
+                .map(|m| m.parent_comment_id),
+            child_comments_ids: comment_parent_mapping
+                .iter()
+                .map(|m| m.child_comment_id)
+                .collect(),
+            child_comments: vec![],
         },
     )
     .collect();
@@ -158,6 +150,7 @@ pub async fn get_comments(
 #[utoipa::path(
     post,
     path = "/api/v1/comics/:comic_id/comments",
+    request_body(content = CreateComicComment, content_type = "application/json"),
     tag = "Comic Comments API"
 )]
 #[axum::debug_handler(state = AppState)]
@@ -166,48 +159,62 @@ pub async fn create_comment(
     State(pool): State<Pool<AsyncPgConnection>>,
     Path(comic_id): Path<Uuid>,
     Json(payload): Json<CreateComicComment>,
-) -> Result<(), ComicCommentsError> {
+) -> Result<Json<ComicCommentResponse>, ComicCommentsError> {
     let mut db = pool.get().await?;
 
-    db.transaction::<_, ComicCommentsError, _>(|transaction| {
-        async move {
-            let comment = ComicComment {
-                id: Uuid::now_v7(),
-                content: payload.content,
-                created_at: Utc::now(),
-                updated_at: None,
-                comic_id,
-                user_id: auth.current_user.id,
-            };
+    let comment = db
+        .transaction::<_, ComicCommentsError, _>(|transaction| {
+            async move {
+                let comment = ComicComment {
+                    id: Uuid::now_v7(),
+                    content: payload.content,
+                    created_at: Utc::now(),
+                    updated_at: None,
+                    comic_id,
+                    user_id: auth.current_user.id,
+                };
 
-            let comment = diesel::insert_into(comic_comments::table)
-                .values(&comment)
-                .get_result::<ComicComment>(transaction)
-                .await?;
-
-            if let Some(parent_comment_id) = payload.parent_comment_id {
-                let count = comic_comments_mapping::table
-                    .filter(comic_comments_mapping::parent_comment_id.eq(parent_comment_id))
-                    .select(diesel::dsl::count(comic_comments_mapping::child_comment_id))
-                    .get_result::<i64>(transaction)
+                let comment = diesel::insert_into(comic_comments::table)
+                    .values(&comment)
+                    .get_result::<ComicComment>(transaction)
                     .await?;
 
-                tracing::debug!("count: {count}");
+                if let Some(parent_comment_id) = payload.parent_comment_id {
 
-                diesel::insert_into(comic_comments_mapping::table)
-                    .values((
-                        comic_comments_mapping::parent_comment_id.eq(parent_comment_id),
-                        comic_comments_mapping::child_comment_id.eq(comment.id),
-                    ))
-                    .execute(transaction)
-                    .await?;
+                    diesel::insert_into(comic_comments_mapping::table)
+                        .values((
+                            comic_comments_mapping::parent_comment_id.eq(parent_comment_id),
+                            comic_comments_mapping::child_comment_id.eq(comment.id),
+                        ))
+                        .execute(transaction)
+                        .await?;
+
+                    Ok(ComicCommentResponse {
+                        id: comment.id,
+                        comic_id,
+                        content: comment.content,
+                        user: auth.current_user,
+                        parent_comment: Some(parent_comment_id),
+                        child_comments_ids: vec![],
+                        child_comments: vec![],
+                    })
+                } else {
+                    Ok(ComicCommentResponse {
+                        id: comment.id,
+                        comic_id,
+                        content: comment.content,
+                        user: auth.current_user,
+                        parent_comment: None,
+                        child_comments_ids: vec![],
+                        child_comments: vec![],
+                    })
+                }
             }
+            .scope_boxed()
+        })
+        .await?;
 
-            Ok(())
-        }
-        .scope_boxed()
-    })
-    .await
+    Ok(Json(comment))
 }
 
 #[utoipa::path(

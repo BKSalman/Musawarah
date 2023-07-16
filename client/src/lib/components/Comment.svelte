@@ -1,18 +1,78 @@
 <script lang="ts">
+    import { goto } from "$app/navigation";
     import type { ComicCommentResponse } from "bindings/ComicCommentResponse";
+    import { faAngleDown, faMessage } from "@fortawesome/free-solid-svg-icons";
+    import Fa from "svelte-fa";
+    import { currentUser } from "../../routes/stores";
+    import { fly } from "svelte/transition";
 
     export let comment: ComicCommentResponse;
     export let indent = 0;
+    let openChildren = false;
+    let openReplyBox = false;
+
+    async function sendComment(e: SubmitEvent, parent_comment_id: string | null) {
+        const form = new FormData(e.target as HTMLFormElement);
+
+        const formComment = form.get("comment");
+
+        if (formComment?.toString() == null || formComment?.toString().length < 1) {
+            return;
+        }
+
+        const res = await fetch(`http://localhost:6060/api/v1/comics/${comment.comic_id}/comments`, {
+            credentials: "include",
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                content: formComment,
+                parent_comment_id: parent_comment_id
+            }),
+        });
+
+        if (res.status >= 400) {
+            // TODO: add message to the user that they need to log in
+            await goto("/login");
+        } else {
+            comment.child_comments.push(await res.json() as ComicCommentResponse);
+            // force it to refresh
+            comment = comment;
+        }
+    }
 </script>
 
-<div style="padding-left: {indent}rem" class="comment">
+<div transition:fly|global={{ y: -10, duration: 100 }} class="comment" style="padding-left: {indent}rem">
     <div class="">{comment.user.username}</div>
     <div class="">{comment.content}</div>
-    <div class="children">
-        {#each comment.child_comments || [] as child}
-            <svelte:self comment={child} indent={indent + 0.1}/>
-        {/each}
-    </div>
+    <button class="reply-box-collapse-button" on:click={() => openReplyBox = !openReplyBox}>
+        <Fa size="1.5x" icon={faMessage} />
+    </button>
+    {#if openReplyBox}
+        {#if $currentUser}
+            <form transition:fly|global={{ y: -10, duration: 100 }} class="new-reply"
+                on:submit|preventDefault={(e) => sendComment(e, comment.id)}>
+
+                <input type="text" name="comment" placeholder="Add a reply">
+                <button type="submit">send</button>
+            </form>
+        {:else}
+            <h3 transition:fly|global={{ y: 10, duration: 200 }}><a href="/login">need to be logged in</a></h3>
+        {/if}
+    {/if}
+    {#if comment.child_comments.length > 0}
+        <div class="children">
+            <button class="children-collapse-button" on:click={() => openChildren = !openChildren}>
+                <Fa size="1.5x" icon={faAngleDown} />
+            </button>
+            {#if openChildren}
+                {#each comment.child_comments || [] as child}
+                    <svelte:self comment={child} indent={indent + 0.1}/>
+                {/each}
+            {/if}
+        </div>
+    {/if}
 </div>
 
 <style>
@@ -21,9 +81,19 @@
     margin-left: 15px;
 }
 .comment {
-    background: black;
+    background: #AAAAAA;
     margin-bottom: 10px;
     border-radius: 5px;
     width: 90%;
+}
+.children-collapse-button {
+    background: none;
+    border: none;
+    cursor: pointer;
+}
+.reply-box-collapse-button {
+    background: none;
+    border: none;
+    cursor: pointer;
 }
 </style>

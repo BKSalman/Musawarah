@@ -32,7 +32,7 @@ pub struct ComicCommentMapping {
     pub child_comment_id: Uuid,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, ToSchema, TS)]
 pub struct CreateComicComment {
     pub content: String,
     pub parent_comment_id: Option<Uuid>,
@@ -42,8 +42,10 @@ pub struct CreateComicComment {
 #[ts(export)]
 pub struct ComicCommentResponse {
     pub id: Uuid,
+    pub comic_id: Uuid,
     pub content: String,
     pub user: UserResponseBrief,
     pub parent_comment: Option<Uuid>,
-    pub child_comments: Option<Vec<Uuid>>,
+    pub child_comments_ids: Vec<Uuid>,
+    pub child_comments: Vec<ComicCommentResponse>,
 }
