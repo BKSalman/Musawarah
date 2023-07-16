@@ -5,12 +5,9 @@
     import { currentUser } from '../../stores';
     import { goto } from '$app/navigation';
     import type { ComicCommentResponse } from 'bindings/ComicCommentResponse';
-    import { faMessage } from '@fortawesome/free-solid-svg-icons';
-    import Fa from 'svelte-fa';
 
     export let data: PageServerData;
 
-    let open = false;
 
     let { comic, comments } = data;
 
