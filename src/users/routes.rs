@@ -278,7 +278,9 @@ pub async fn logout(
 ) -> Result<(), UsersError> {
     let mut db = pool.get().await?;
 
-    diesel::delete(sessions::table.filter(sessions::id.eq(auth.session_id))).execute(&mut db);
+    diesel::delete(sessions::table.filter(sessions::id.eq(auth.session_id)))
+        .execute(&mut db)
+        .await?;
 
     let mut cookie = Cookie::build(SESSION_COOKIE_NAME, "")
         .path("/")
