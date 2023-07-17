@@ -76,8 +76,8 @@ pub fn chapters_router() -> Router<AppState> {
     request_body(content = CreateChapter, content_type = "application/json"),
     responses(
         (status = 200, description = "Chapter successfully created", body = UserResponse),
-        (status = StatusCode::CONFLICT, description = "Chapter number conflicts with an already existing one", body = ErrorHandlingResponse),
-        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
+        (status = StatusCode::CONFLICT, description = "Chapter number conflicts with an already existing one", body = ErrorResponse),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorResponse),
     ),
     tag = "Chapters API"
 )]
@@ -118,8 +118,8 @@ pub async fn create_chapter(
     request_body(content = CreateChapterPage, content_type = "multipart/form-data"),
     responses(
         (status = 200, description = "Chapter page successfully created", body = ChapterResponse),
-        (status = StatusCode::BAD_REQUEST, description = "Fields validation error", body = ErrorHandlingResponse),
-        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
+        (status = StatusCode::BAD_REQUEST, description = "Fields validation error", body = ErrorResponse),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorResponse),
     ),
     tag = "Chapters API"
 )]
@@ -313,8 +313,8 @@ pub async fn create_chapter_page(
     path = "/api/v1/comics/chapters/s/:chapter_id",
     responses(
         (status = 200, description = "Get chapter", body = ChapterResponse),
-        (status = StatusCode::NOT_FOUND, description = "Specified chapter not found", body = ErrorHandlingResponse),
-        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
+        (status = StatusCode::NOT_FOUND, description = "Specified chapter not found", body = ErrorResponse),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorResponse),
     ),
     tag = "Chapters API"
 )]
@@ -352,7 +352,7 @@ pub async fn get_chapter(
     request_body(content = UpdateChapter, content_type = "application/json"),
     responses(
         (status = 200, body = Uuid),
-        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorResponse),
     ),
     tag = "Chapters API"
 )]
@@ -384,7 +384,7 @@ pub async fn update_chapter(
     path = "/api/v1/comics/chapters/:chapter_id",
     responses(
         (status = 200, description = "Specified chapter has been successfully deleted"),
-        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorResponse),
     ),
     tag = "Chapters API"
 )]
@@ -413,7 +413,7 @@ pub async fn delete_chapter(
     path = "/api/v1/comics/chapters/page/:chapter_page_id",
     responses(
         (status = 200, description = "Specified chapter page has been successfully deleted"),
-        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorResponse),
     ),
     tag = "Chapters API"
 )]
@@ -504,7 +504,7 @@ pub async fn rate_chapter(
     ),
     responses(
         (status = 200, body = [ChapterResponse]),
-        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorResponse),
     ),
     tag = "Chapters API"
 )]

@@ -52,8 +52,8 @@ pub fn comics_router() -> Router<AppState> {
     request_body(content = CreateComic, content_type = "application/json"),
     responses(
         (status = 200, description = "Caller authorized. returned requested comic", body = ComicResponse),
-        (status = StatusCode::UNAUTHORIZED, description = "Caller unauthorized", body = ErrorHandlingResponse ),
-        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
+        (status = StatusCode::UNAUTHORIZED, description = "Caller unauthorized", body = ErrorResponse ),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorResponse),
     ),
     security(
         ("auth" = [])
@@ -144,8 +144,8 @@ pub async fn create_comic(
     path = "/api/v1/comics/:comic_id",
     responses(
         (status = 200, description = "Caller authorized. returned requested comic", body = ComicResponse),
-        (status = StatusCode::UNAUTHORIZED, description = "Caller unauthorized", body = ErrorHandlingResponse ),
-        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
+        (status = StatusCode::UNAUTHORIZED, description = "Caller unauthorized", body = ErrorResponse ),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorResponse),
     ),
     security(
         ("auth" = [])
@@ -232,7 +232,7 @@ pub async fn get_comic(
     ),
     responses(
         (status = 200, body = [ComicResponse]),
-        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorResponse),
     ),
     tag = "Comics API"
 )]
@@ -350,7 +350,7 @@ pub async fn get_comics(
     request_body(content = UpdateComic, content_type = "application/json"),
     responses(
         (status = 200, description = "Specified comic has been successfully updated", body = Uuid),
-        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorResponse),
     ),
     tag = "Comics API"
 )]
@@ -389,7 +389,7 @@ pub async fn update_comic(
     path = "/api/v1/comics/:comic_id",
     responses(
         (status = 200, description = "Specified comic has been successfully deleted"),
-        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorResponse),
     ),
     tag = "Comics API"
 )]
