@@ -37,7 +37,12 @@ pub fn comic_comments_router() -> Router<AppState> {
 #[utoipa::path(
     get,
     path = "/api/v1/comics/:comic_id/comments",
-    tag = "Comic Comments API"
+    responses(
+        (status = 200, description = "Caller authorized, returned comics comments", body = [ComicCommentResponse]),
+        (status = StatusCode::BAD_REQUEST, description = "Invalid Comic ID", body = ErrorResponse),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorResponse),
+    ),
+    tag = "Comic Comments API",
 )]
 #[axum::debug_handler(state = AppState)]
 pub async fn get_comments(
@@ -151,6 +156,11 @@ pub async fn get_comments(
     post,
     path = "/api/v1/comics/:comic_id/comments",
     request_body(content = CreateComicComment, content_type = "application/json"),
+    responses (
+        (status = 200, description = "Comment successfully created", body = ComicCommentResponse),
+        (status = StatusCode::BAD_REQUEST, description = "Invalid Comic ID", body = ErrorResponse),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorResponse),
+    ),
     tag = "Comic Comments API"
 )]
 #[axum::debug_handler(state = AppState)]
@@ -180,7 +190,6 @@ pub async fn create_comment(
                     .await?;
 
                 if let Some(parent_comment_id) = payload.parent_comment_id {
-
                     diesel::insert_into(comic_comments_mapping::table)
                         .values((
                             comic_comments_mapping::parent_comment_id.eq(parent_comment_id),
@@ -220,6 +229,11 @@ pub async fn create_comment(
 #[utoipa::path(
     delete,
     path = "/api/v1/comics/comments/:comment_id",
+    responses(
+        (status = 200, description = "Specified comment has been successfully deleted. returned deleted comment's ID", body = Uuid),
+        (status = StatusCode::BAD_REQUEST, description = "Invalid Comment ID", body = ErrorResponse),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorResponse),
+    ),
     tag = "Comic Comments API"
 )]
 #[axum::debug_handler(state = AppState)]

@@ -41,9 +41,8 @@ impl IntoResponse for ComicCommentsError {
                             .into_response();
                     }
                 } else if diesel_err == diesel::result::Error::NotFound {
-                    // TODO: should this be 404 not found?
                     return (
-                        StatusCode::BAD_REQUEST,
+                        StatusCode::NOT_FOUND,
                         ErrorResponse {
                             error: String::from("comment id not found"),
                             ..Default::default()
