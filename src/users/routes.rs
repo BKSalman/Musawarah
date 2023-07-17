@@ -161,6 +161,7 @@ pub async fn create_user(
             path: profile_image.path,
             content_type: profile_image.content_type,
         },
+        role: user.role,
     }))
 }
 
@@ -462,6 +463,7 @@ pub async fn get_user(
             content_type: profile_image.content_type,
             path: profile_image.path,
         },
+        role: user.role,
     };
 
     Ok(Json(user))
