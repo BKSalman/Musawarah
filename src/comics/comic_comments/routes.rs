@@ -100,10 +100,7 @@ pub async fn get_comments(
                 email: user.email,
                 role: user.role,
             },
-            parent_comment: comment_children_mapping
-                .iter()
-                .nth(0)
-                .map(|m| m.parent_comment_id),
+            parent_comment: comment_children_mapping.get(0).map(|m| m.parent_comment_id),
             child_comments_ids: comment_parent_mapping
                 .iter()
                 .map(|m| m.child_comment_id)
