@@ -40,6 +40,15 @@ impl IntoResponse for ComicCommentsError {
                         )
                             .into_response();
                     }
+                } else if diesel_err == diesel::result::Error::NotFound {
+                    return (
+                        StatusCode::NOT_FOUND,
+                        ErrorResponse {
+                            error: String::from("comment id not found"),
+                            ..Default::default()
+                        },
+                    )
+                        .into_response();
                 }
                 StatusCode::INTERNAL_SERVER_ERROR.into_response()
             }

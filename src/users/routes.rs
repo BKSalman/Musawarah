@@ -172,9 +172,9 @@ pub async fn create_user(
         content_type = "application/json"
     ),
     responses(
-        (status = 200, description = "User authenticated", body = UserToken),
-        (status = StatusCode::UNAUTHORIZED, description = "User unauthorized", body = ErrorHandlingResponse ),
-        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
+        (status = 200, description = "User authenticated"),
+        (status = StatusCode::UNAUTHORIZED, description = "User unauthorized", body = ErrorResponse),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorResponse),
     ),
     tag = "Users API"
 )]
@@ -313,8 +313,8 @@ pub async fn logout(
     ),
     responses(
         (status = 200, description = "Caller authorized. returned requested user's comics", body = [ComicResponse]),
-        (status = StatusCode::UNAUTHORIZED, description = "Caller unauthorized", body = ErrorHandlingResponse),
-        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
+        (status = StatusCode::UNAUTHORIZED, description = "Caller unauthorized", body = ErrorResponse),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorResponse),
     ),
     security(
         ("auth" = [])
@@ -424,8 +424,8 @@ pub async fn get_user_comics(
     path = "/api/v1/users/:username",
     responses(
         (status = 200, description = "Caller authorized. returned current user info", body = UserClaims),
-        (status = StatusCode::UNAUTHORIZED, description = "Caller unauthorized", body = ErrorHandlingResponse ),
-        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
+        (status = StatusCode::UNAUTHORIZED, description = "Caller unauthorized", body = ErrorResponse ),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorResponse),
     ),
     security(
         ("auth" = [])

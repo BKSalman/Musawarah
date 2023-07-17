@@ -89,28 +89,22 @@ impl IntoResponse for ChaptersError {
                 DatabaseError(DatabaseErrorKind::UniqueViolation, message) => {
                     let constraint_name = message.constraint_name();
                     match constraint_name {
-                        Some("comic_chapters_comic_id_number_key") => {
-                            return (
-                                StatusCode::CONFLICT,
-                                ErrorResponse {
-                                    error: String::from("chapter with same number already exists"),
-                                    ..Default::default()
-                                },
-                            )
-                                .into_response();
-                        }
-                        Some("chapter_pages_chapter_id_number_key") => {
-                            return (
-                                StatusCode::CONFLICT,
-                                ErrorResponse {
-                                    error: String::from(
-                                        "chapter page with same number already exists",
-                                    ),
-                                    ..Default::default()
-                                },
-                            )
-                                .into_response();
-                        }
+                        Some("comic_chapters_comic_id_number_key") => (
+                            StatusCode::CONFLICT,
+                            ErrorResponse {
+                                error: String::from("chapter with same number already exists"),
+                                ..Default::default()
+                            },
+                        )
+                            .into_response(),
+                        Some("chapter_pages_chapter_id_number_key") => (
+                            StatusCode::CONFLICT,
+                            ErrorResponse {
+                                error: String::from("chapter page with same number already exists"),
+                                ..Default::default()
+                            },
+                        )
+                            .into_response(),
                         _ => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
                     }
                 }

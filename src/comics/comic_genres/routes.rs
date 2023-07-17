@@ -31,7 +31,7 @@ pub fn comic_genres_router() -> Router<AppState> {
     path = "/api/v1/comics/genres",
     responses(
         (status = StatusCode::OK, body = [ComicGenre]),
-        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorResponse),
     ),
     tag = "Comic Genres API"
 )]
@@ -63,7 +63,7 @@ pub async fn get_genres(
     path = "/api/v1/comics/genres",
     responses(
         (status = StatusCode::OK),
-        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorResponse),
     ),
     tag = "Comic Genres API"
 )]
@@ -91,7 +91,7 @@ pub async fn create_genre(
     path = "/api/v1/comics/genres/:genre_id",
     responses(
         (status = StatusCode::OK),
-        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorResponse),
     ),
     tag = "Comic Genres API"
 )]
@@ -117,7 +117,7 @@ pub async fn update_genre(
     path = "/api/v1/comics/genres/:genre_id",
     responses(
         (status = StatusCode::OK),
-        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorHandlingResponse),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorResponse),
     ),
     tag = "Comic Genres API"
 )]

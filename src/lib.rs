@@ -107,6 +107,7 @@ pub static COOKIES_SECRET: OnceCell<Key> = OnceCell::new();
         schemas(users::models::UserLogin),
         schemas(users::models::UserToken),
         schemas(ErrorResponse),
+        schemas(SortingOrder),
     ),
     modifiers(&SecurityAddon),
     tags(
@@ -164,7 +165,7 @@ pub trait Rating {
     fn rating(&self) -> f64;
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub enum SortingOrder {
     #[serde(rename = "desc")]
     Descending,
