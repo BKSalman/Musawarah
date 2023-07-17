@@ -41,6 +41,7 @@ use crate::{
 };
 
 use super::{
+    email_verifications::routes::email_verification_router,
     models::{CreateUser, ProfileImage, UserLogin, UserResponse, UserResponseBrief, UserRole},
     UsersError,
 };
@@ -53,6 +54,7 @@ pub fn users_router() -> Router<AppState> {
         .route("/", post(create_user))
         .route("/login", post(login))
         .route("/me", get(me))
+        .nest("/", email_verification_router())
 }
 
 /// get user by cookie

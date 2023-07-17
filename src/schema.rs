@@ -106,6 +106,16 @@ diesel::table! {
 }
 
 diesel::table! {
+    email_verifications (id) {
+        id -> Uuid,
+        email -> Text,
+        created_at -> Timestamptz,
+        expires_at -> Timestamptz,
+        user_id -> Uuid,
+    }
+}
+
+diesel::table! {
     profile_images (id) {
         id -> Uuid,
         path -> Text,
@@ -168,6 +178,7 @@ diesel::joinable!(comic_genres_mapping -> comics (comic_id));
 diesel::joinable!(comic_ratings -> comics (comic_id));
 diesel::joinable!(comic_ratings -> users (user_id));
 diesel::joinable!(comics -> users (user_id));
+diesel::joinable!(email_verifications -> users (user_id));
 diesel::joinable!(profile_images -> users (user_id));
 diesel::joinable!(sessions -> users (user_id));
 
@@ -181,6 +192,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     comic_genres_mapping,
     comic_ratings,
     comics,
+    email_verifications,
     profile_images,
     sessions,
     user_links,
