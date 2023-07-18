@@ -1,6 +1,5 @@
 use axum::extract::Path;
 use axum::routing::post;
-use axum::Json;
 use axum::{extract::State, Router};
 use chrono::{Duration, Utc};
 use diesel::prelude::*;
@@ -36,6 +35,9 @@ pub async fn create_email_verification(
         .execute(&mut db)
         .await?;
     // TODO: send email with verification_id
+    email_verification
+        .send_email(auth.current_user.username)
+        .await?;
     Ok(())
 }
 

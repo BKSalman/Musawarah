@@ -13,7 +13,7 @@ use dotenvy::dotenv;
 use musawarah::{
     comics::routes::comics_router, migrations::run_migrations, s3::helpers::setup_storage,
     sessions::refresh_session, users::routes::users_router, ApiDoc, AppState, Config, ConfigError,
-    COOKIES_SECRET,
+    COOKIES_SECRET, EMAIL_PASSWORD, EMAIL_SMTP_SERVER, EMAIL_USERNAME,
 };
 use rand::Rng;
 use std::{
@@ -69,6 +69,7 @@ async fn main() {
 
                 let config = Config {
                     cookie_secret: secret,
+                    ..Default::default()
                 };
 
                 let config_str = toml::to_string(&config).unwrap();
@@ -86,6 +87,9 @@ async fn main() {
     COOKIES_SECRET
         .set(Key::from(config.cookie_secret.as_bytes()))
         .ok();
+    EMAIL_USERNAME.set(config.email_username).ok();
+    EMAIL_PASSWORD.set(config.email_password).ok();
+    EMAIL_SMTP_SERVER.set(config.email_smtp_server).ok();
 
     let cors = CorsLayer::new()
         .allow_methods([Method::GET, Method::POST, Method::DELETE, Method::PUT])

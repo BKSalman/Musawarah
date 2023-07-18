@@ -31,9 +31,12 @@ pub enum ConfigError {
     TomlError(#[from] toml::de::Error),
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Default)]
 pub struct Config {
     pub cookie_secret: String,
+    pub email_username: String,
+    pub email_password: String,
+    pub email_smtp_server: String,
 }
 
 impl Config {
@@ -51,6 +54,9 @@ pub struct AppState {
 }
 
 pub static COOKIES_SECRET: OnceCell<Key> = OnceCell::new();
+pub static EMAIL_USERNAME: OnceCell<String> = OnceCell::new();
+pub static EMAIL_PASSWORD: OnceCell<String> = OnceCell::new();
+pub static EMAIL_SMTP_SERVER: OnceCell<String> = OnceCell::new();
 
 #[derive(OpenApi)]
 #[openapi(
