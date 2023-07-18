@@ -22,9 +22,8 @@ pub async fn create_email_verification(
     State(pool): State<Pool<AsyncPgConnection>>,
 ) -> Result<(), EmailVerificationError> {
     let mut db = pool.get().await?;
-    let verification_id = Uuid::now_v7();
     let email_verification = EmailVerification {
-        id: verification_id,
+        id: Uuid::now_v7(),
         email: auth.current_user.email,
         created_at: Utc::now(),
         expires_at: Utc::now() + Duration::hours(1),
@@ -34,7 +33,6 @@ pub async fn create_email_verification(
         .values(&email_verification)
         .execute(&mut db)
         .await?;
-    // TODO: send email with verification_id
     email_verification
         .send_email(auth.current_user.username)
         .await?;

@@ -14,9 +14,3 @@ pub struct EmailVerification {
     pub expires_at: DateTime<chrono::Utc>,
     pub user_id: Uuid,
 }
-
-// #[derive(Deserialize, Serialize, Debug, ToSchema, TS)]
-// #[ts(export)]
-// pub struct CreateEmailVerification {
-//     pub user_id: Uuid,
-// }
