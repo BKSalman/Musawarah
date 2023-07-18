@@ -24,6 +24,5 @@
   .main-container {
     max-width: 1250px;
     height: 100%;
-    margin: 0px auto;
   }
 </style>

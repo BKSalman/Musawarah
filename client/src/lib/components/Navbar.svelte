@@ -26,8 +26,11 @@
         justify-content: space-between;
         align-items: center;
         height: 3em;
-        margin: auto;
+        width: 100%;
         background-color: gray;
+        overflow: hidden;
+        position: sticky;
+        top: 0;
     }
 
     .user-menu {
