@@ -21,7 +21,7 @@ pub fn email_verification_router() -> Router<AppState> {
 pub async fn create_email_verification(
     auth: AuthExtractor<{ UserRole::User as u32 }>,
     State(pool): State<Pool<AsyncPgConnection>>,
-) -> Result<Json<Uuid>, EmailVerificationError> {
+) -> Result<(), EmailVerificationError> {
     let mut db = pool.get().await?;
     let verification_id = Uuid::now_v7();
     let email_verification = EmailVerification {
@@ -33,11 +33,10 @@ pub async fn create_email_verification(
     };
     diesel::insert_into(email_verifications::table)
         .values(&email_verification)
-        .returning(EmailVerification::as_returning())
         .execute(&mut db)
         .await?;
-    // TODO: send email
-    Ok(Json(verification_id))
+    // TODO: send email with verification_id
+    Ok(())
 }
 
 pub async fn confirm_email(
