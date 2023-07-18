@@ -1,7 +1,7 @@
 -- Your SQL goes here
 CREATE TABLE IF NOT EXISTS comic_chapters (
     id UUID PRIMARY KEY,
-    title TEXT,
+    title TEXT NOT NULL,
     description TEXT,
     number INTEGER NOT NULL,
     created_at TIMESTAMPTZ NOT NULL,
