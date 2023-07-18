@@ -10,6 +10,7 @@ diesel::table! {
     chapter_pages (id) {
         id -> Uuid,
         number -> Int4,
+        description -> Nullable<Text>,
         path -> Text,
         content_type -> Text,
         comic_id -> Uuid,
@@ -34,7 +35,7 @@ diesel::table! {
 diesel::table! {
     comic_chapters (id) {
         id -> Uuid,
-        title -> Nullable<Text>,
+        title -> Text,
         description -> Nullable<Text>,
         number -> Int4,
         created_at -> Timestamptz,

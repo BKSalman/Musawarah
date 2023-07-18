@@ -255,6 +255,7 @@ pub async fn create_chapter_page(
                     comic_id: chapter_page.comic_id,
                     chapter_id: chapter_page.chapter_id,
                     number: chapter_page.number,
+                    description: chapter_page.description,
                     path: upload.path,
                     content_type: upload.content_type,
                     created_at: Utc::now(),
@@ -295,6 +296,7 @@ pub async fn create_chapter_page(
     let chapter_page = ChapterPageResponse {
         id: new_chapter_page.id,
         number: new_chapter_page.number,
+        description: new_chapter_page.description,
         image: ImageResponse {
             path: new_chapter_page.path,
             content_type: new_chapter_page.content_type,

@@ -23,7 +23,7 @@ use crate::{
 #[diesel(table_name = comic_chapters)]
 pub struct Chapter {
     pub id: Uuid,
-    pub title: Option<String>,
+    pub title: String,
     pub description: Option<String>,
     pub number: i32,
     pub created_at: DateTime<chrono::Utc>,
@@ -51,6 +51,7 @@ impl Chapter {
                 .map(|page| ChapterPageResponse {
                     id: page.id,
                     number: page.number,
+                    description: page.description,
                     image: ImageResponse {
                         content_type: page.content_type,
                         path: page.path,
@@ -73,6 +74,7 @@ impl Chapter {
                 .map(|page| ChapterPageResponse {
                     id: page.id,
                     number: page.number,
+                    description: page.description,
                     image: ImageResponse {
                         content_type: page.content_type,
                         path: page.path,
@@ -91,6 +93,7 @@ impl Chapter {
 pub struct ChapterPage {
     pub id: Uuid,
     pub number: i32,
+    pub description: Option<String>,
     pub path: String,
     pub content_type: String,
     pub comic_id: Uuid,
@@ -119,9 +122,10 @@ impl Rating for ChapterRating {
     }
 }
 
-#[derive(Deserialize, ToSchema, Debug)]
+#[derive(Deserialize, ToSchema, Debug, TS)]
+#[ts(export)]
 pub struct CreateChapter {
-    pub title: Option<String>,
+    pub title: String,
     pub description: Option<String>,
     pub number: i32,
 }
@@ -138,7 +142,7 @@ pub struct UpdateChapter {
 #[ts(export)]
 pub struct ChapterResponse {
     pub id: Uuid,
-    pub title: Option<String>,
+    pub title: String,
     pub rating: f64,
     pub number: i32,
     pub description: Option<String>,
@@ -150,7 +154,7 @@ pub struct ChapterResponse {
 #[ts(export)]
 pub struct ChapterResponseBrief {
     pub id: Uuid,
-    pub title: Option<String>,
+    pub title: String,
     pub number: i32,
     pub description: Option<String>,
     pub pages: Vec<ChapterPageResponse>,
@@ -163,6 +167,7 @@ pub struct CreateChapterPage {
     chapter_id: Uuid,
     comic_id: Uuid,
     number: u32,
+    description: Option<String>,
     #[schema(value_type = String, format = Binary)]
     image: fs::File,
 }
@@ -188,6 +193,7 @@ impl ChapterPageData {
 pub struct ChapterPageResponse {
     pub id: Uuid,
     pub number: i32,
+    pub description: Option<String>,
     pub image: ImageResponse,
 }
 
