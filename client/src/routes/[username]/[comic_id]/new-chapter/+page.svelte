@@ -13,7 +13,8 @@
     const chapterSchema = z.object({
       title: z.string().optional(),
       description: z.string().optional(),
-      number: z.number(),
+      // TODO: get chapter numbers from backend to check what are the taken numbers
+      number: z.number().default(1),
     });
 
     const { form, errors, message, constraints, enhance } = superForm(
@@ -24,7 +25,7 @@
         onUpdate: async ({ form }) => {
           console.log(form.valid);
           if (form.valid) {
-            const res = await fetch(`http://localhost:6060/api/v1/comics/${comic_id}`, {
+            const res = await fetch(`http://localhost:6060/api/v1/comics/${comic_id}/chapters`, {
               credentials: "include",
               method: "POST",
               headers: {
@@ -41,11 +42,13 @@
               const errorMessage: ErrorResponse = await res.json();
               console.log(res.status, res.statusText, errorMessage.error);
               if (errorMessage.error.includes("title")) {
-                setError(form, "title", errorMessage.error);
+                  setError(form, "title", errorMessage.error);
               } else if (errorMessage.error.includes("description")) {
-                setError(form, "description", errorMessage.error);
+                  setError(form, "description", errorMessage.error);
+              } else if (errorMessage.error.includes("number")) {
+                  setError(form, "number", errorMessage.error);
               } else {
-                setError(form, "number", errorMessage.error);
+                  setMessage(form, errorMessage.error);
               }
 
               return;
@@ -71,15 +74,15 @@
     <div class="field">
       <input
         type="text"
-        id="username-input"
-        name="username"
+        id="title-input"
+        name="title"
         data-invalid={$errors.title}
         bind:value={$form.title}
         {...$constraints.title}
       />
-      <div class="">
+      <div>
         <small class="star">*</small>
-        <label for="title" id="title-label">العنوان</label>
+        <label for="title-input" id="title-label">العنوان</label>
       </div>
     </div>
     {#if $errors.title}<small class="invalid">{$errors.title}</small>{/if}
@@ -92,19 +95,22 @@
         bind:value={$form.description}
         {...$constraints.description}
       />
-      <label for="description" id="description-label">الوصف</label>
+      <label for="description-input" id="description-label">الوصف</label>
     </div>
     {#if $errors.description}<small class="invalid">{$errors.description}</small >{/if}
     <div class="field">
       <input
         type="number"
-        id="number-input"
-        name="number"
+        id="chapter-number-input"
+        name="chapter-number"
         data-invalid={$errors.number}
         bind:value={$form.number}
         {...$constraints.number}
       />
-      <label for="number" id="number-label">الرقم</label>
+      <div>
+          <small class="star">*</small>
+          <label for="chapter-number-input" id="number-label">رقم الفصل</label>
+      </div>
     </div>
     {#if $errors.number}<small class="invalid">{$errors.number}</small >{/if}
     <button type="submit">انشاء</button>
@@ -156,6 +162,5 @@
     color: red;
   }
   .message {
-    color: green;
+    color: red;
   }
-</style>
