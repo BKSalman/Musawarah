@@ -1,8 +1,7 @@
 use axum::{http::StatusCode, response::IntoResponse};
 use lettre::{
-    message::header::ContentType,
-    transport::smtp::{self, authentication::Credentials},
-    AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor,
+    message::header::ContentType, transport::smtp::authentication::Credentials, AsyncSmtpTransport,
+    AsyncTransport, Message, Tokio1Executor,
 };
 
 use crate::{ErrorResponse, EMAIL_PASSWORD, EMAIL_SMTP_SERVER, EMAIL_USERNAME};
@@ -17,18 +16,21 @@ pub enum EmailVerificationError {
     #[error(transparent)]
     PoolError(#[from] diesel_async::pooled_connection::deadpool::PoolError),
 
-    #[error("something went wrong")]
+    #[error(transparent)]
     Diesel(#[from] diesel::result::Error),
 
     #[error("Email has expired")]
     ExpiredEmail,
 
     #[error(transparent)]
-    EmailSendError(#[from] smtp::Error),
+    EmailSendError(#[from] lettre::transport::smtp::Error),
+
+    #[error(transparent)]
+    BodyCreationError(#[from] lettre::error::Error),
 }
 
 impl EmailVerification {
-    async fn send_email(&self, username: String) -> Result<(), smtp::Error> {
+    async fn send_email(&self, username: String) -> Result<(), EmailVerificationError> {
         let email_username = EMAIL_USERNAME.get().expect("Email Username");
         let email_password = EMAIL_PASSWORD.get().expect("Email Password");
         let email_smtp_server = EMAIL_SMTP_SERVER.get().expect("Email SMTP Server");
@@ -45,14 +47,12 @@ impl EmailVerification {
             .body(format!(
                 "Click below to verify your account.\nhttp://localhost:5173/confirm-email/{}",
                 self.id
-            ))
-            .unwrap();
+            ))?;
 
         let creds = Credentials::new(email_username.clone(), email_password.clone());
 
         let mailer: AsyncSmtpTransport<Tokio1Executor> =
-            AsyncSmtpTransport::<Tokio1Executor>::relay(email_smtp_server)
-                .unwrap()
+            AsyncSmtpTransport::<Tokio1Executor>::relay(email_smtp_server)?
                 .credentials(creds)
                 .build();
 
@@ -81,6 +81,7 @@ impl IntoResponse for EmailVerificationError {
             }
             Self::PoolError(_) => (StatusCode::INTERNAL_SERVER_ERROR).into_response(),
             Self::EmailSendError(_) => (StatusCode::INTERNAL_SERVER_ERROR).into_response(),
+            Self::BodyCreationError(_) => (StatusCode::INTERNAL_SERVER_ERROR).into_response(),
             Self::ExpiredEmail => (
                 StatusCode::GONE,
                 ErrorResponse {
