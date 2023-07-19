@@ -309,7 +309,7 @@ pub async fn create_chapter_page(
 /// Get chapter of a comic
 #[utoipa::path(
     get,
-    path = "/api/v1/comics/chapters/s/:chapter_id",
+    path = "/api/v1/comics/chapters/:chapter_id/s/",
     responses(
         (status = 200, description = "Get chapter", body = ChapterResponse),
         (status = StatusCode::NOT_FOUND, description = "Specified chapter not found", body = ErrorResponse),

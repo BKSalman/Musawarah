@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { page } from '$app/stores';
     import type { PageServerData } from './$types';
 
     export let data: PageServerData;
@@ -13,6 +14,7 @@
     {#if chapter.description}
         <div class="description"><strong>Description: </strong>{chapter.description}</div>
     {/if}
+    <a href={`${$page.url.href}/chapter-settings`}>Settings</a>
 </div>
 <br/>
 <div class="pages">
