@@ -1,4 +1,4 @@
-import { error } from '@sveltejs/kit';
+import { error, redirect } from '@sveltejs/kit';
 import type { PageLoad } from './$types';
 import type { ChapterResponse } from 'bindings/ChapterResponse';
 
@@ -9,7 +9,9 @@ export const load = (async ({ fetch, params }) => {
         credentials: "include",
     });
 
-    if (res.status !== 200) {
+    if (res.status === 401) {
+        throw redirect(307, "/");
+    } else if (res.status !== 200) {
         const errorMessage = await res.json();
         throw error(res.status, errorMessage.error);
     }
@@ -17,6 +19,8 @@ export const load = (async ({ fetch, params }) => {
     const chapter: ChapterResponse = await res.json();
 
     return {
+        comic_id,
+        username,
         chapter,
     }
 }) satisfies PageLoad;
