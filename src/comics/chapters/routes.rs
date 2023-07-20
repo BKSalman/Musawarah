@@ -26,7 +26,7 @@ use tower_http::limit::RequestBodyLimitLayer;
 use crate::{
     auth::AuthExtractor,
     comics::chapters::{
-        models::{ChapterPage, ChapterRating, NewChapterRating},
+        models::{ChapterPage, ChapterRating, NewChapterRating, UpdateChapterPage},
         ChaptersParams,
     },
     common::models::ImageResponse,
@@ -65,8 +65,13 @@ pub fn chapters_router() -> Router<AppState> {
         .route("/chapters/:chapter_id/s", get(get_chapter))
         .route("/chapters/:chapter_id/rate", post(rate_chapter))
         .route(
-            "/:comic_id/:chapter_id/chapters/pages",
+            "/:comic_id/chapters/:chapter_id/pages",
             post(create_chapter_page),
+        )
+        .route("/chapters/pages/:chapter_page_id", put(update_chapter_page))
+        .route(
+            "/chapters/pages/:chapter_page_id",
+            delete(delete_chapter_page),
         )
 }
 
@@ -124,7 +129,7 @@ pub struct ChapterPagePathParams {
     path = "/api/v1/comics/:comic_id/chapters/:chapter_id/pages",
     request_body(content = CreateChapterPage, content_type = "multipart/form-data"),
     responses(
-        (status = 200, description = "Chapter page successfully created", body = ChapterResponse),
+        (status = 200, description = "Chapter page successfully created", body = ChapterPageResponse),
         (status = StatusCode::BAD_REQUEST, description = "Fields validation error", body = ErrorResponse),
         (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorResponse),
     ),
@@ -149,11 +154,11 @@ pub async fn create_chapter_page(
         if let Some(field_name) = field.name() {
             match field_name {
                 "description" => {
-                    tracing::debug!("adding description");
+                    tracing::debug!("adding chapter page description");
                     chapter_page = chapter_page.description(field.text().await.ok());
                 }
                 "number" => {
-                    tracing::debug!("adding chapter number");
+                    tracing::debug!("adding chapter page number");
                     chapter_page = chapter_page.number(
                         field
                             .text()
@@ -170,16 +175,20 @@ pub async fn create_chapter_page(
                     );
                 }
                 "image" => {
-                    tracing::debug!("adding image");
+                    tracing::debug!("adding chapter page image");
                     if !ALLOWED_MIME_TYPES
                         .contains(&field.content_type().ok_or(ChaptersError::BadRequest)?)
                     {
+                        tracing::error!("wrong image type");
                         return Err(ChaptersError::BadRequest);
                     }
 
                     let file_name = field
                         .file_name()
-                        .ok_or(ChaptersError::BadRequest)?
+                        .ok_or_else(|| {
+                            tracing::error!("no file name");
+                            return ChaptersError::BadRequest;
+                        })?
                         .to_string();
 
                     let temp_file = tempfile().expect("temp file");
@@ -198,7 +207,7 @@ pub async fn create_chapter_page(
 
                     temp_file.seek(SeekFrom::Start(0)).await.expect("seek file");
 
-                    let s3_file_name = format!("{}_{}", file_name, Uuid::now_v7());
+                    let s3_file_name = format!("{}_{}", Uuid::now_v7(), file_name);
 
                     upload = upload
                         .path(s3_file_name)
@@ -221,11 +230,19 @@ pub async fn create_chapter_page(
         }
     }
 
-    let chapter_page = chapter_page
-        .build()
-        .map_err(|_| ChaptersError::BadRequest)?;
+    tracing::debug!("{:#?}", chapter_page);
 
-    let upload = upload.build().map_err(|_| ChaptersError::BadRequest)?;
+    let chapter_page = chapter_page.build().map_err(|e| {
+        tracing::error!("failed to build chapter page: {}", e);
+
+        ChaptersError::BadRequest
+    })?;
+
+    let upload = upload.build().map_err(|_| {
+        tracing::error!("failed to build upload");
+
+        ChaptersError::BadRequest
+    })?;
 
     let new_chapter_page = db
         .transaction::<_, ChaptersError, _>(|transaction| {
@@ -250,8 +267,8 @@ pub async fn create_chapter_page(
                     .await?;
 
                 // upload image to s3
-                if let Err(err) = state
-                    .storage
+                tracing::debug!("uploading chapter page image");
+                if let Err(err) = storage
                     .put(
                         &chapter_page.path,
                         upload.stream,
@@ -286,6 +303,39 @@ pub async fn create_chapter_page(
     };
 
     Ok(Json(chapter_page))
+}
+
+/// Update chapter page
+#[utoipa::path(
+    put,
+    path = "/api/v1/comics/chapters/pages/:chapter_page_id",
+    request_body(content = UpdateChapter, content_type = "application/json"),
+    responses(
+        (status = 200, description = "Chapter page has successfully been updated", body = Uuid),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorResponse),
+    ),
+    tag = "Chapters API"
+)]
+#[axum::debug_handler(state = AppState)]
+pub async fn update_chapter_page(
+    auth: AuthExtractor<{ UserRole::User as u32 }>,
+    State(pool): State<Pool<AsyncPgConnection>>,
+    Path(chapter_page_id): Path<Uuid>,
+    Json(payload): Json<UpdateChapterPage>,
+) -> Result<Json<Uuid>, ChaptersError> {
+    let mut db = pool.get().await?;
+
+    let chapter_page = diesel::update(
+        chapter_pages::table
+            .filter(chapter_pages::id.eq(chapter_page_id))
+            .filter(chapter_pages::user_id.eq(auth.current_user.id)),
+    )
+    .set(&payload)
+    .returning(ChapterPage::as_returning())
+    .get_result(&mut db)
+    .await?;
+
+    Ok(Json(chapter_page.id))
 }
 
 /// Get chapter of a comic
@@ -332,7 +382,7 @@ pub async fn get_chapter(
     path = "/api/v1/comics/chapters/:chapter_id",
     request_body(content = UpdateChapter, content_type = "application/json"),
     responses(
-        (status = 200, body = Uuid),
+        (status = 200, description = "Chapter has successfully been updated", body = Uuid),
         (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorResponse),
     ),
     tag = "Chapters API"
@@ -364,7 +414,7 @@ pub async fn update_chapter(
     delete,
     path = "/api/v1/comics/chapters/:chapter_id",
     responses(
-        (status = 200, description = "Specified chapter has been successfully deleted"),
+        (status = 200, description = "Specified chapter has been successfully deleted", body = Uuid),
         (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorResponse),
     ),
     tag = "Chapters API"
@@ -394,6 +444,7 @@ pub async fn delete_chapter(
     path = "/api/v1/comics/chapters/page/:chapter_page_id",
     responses(
         (status = 200, description = "Specified chapter page has been successfully deleted"),
+        (status = StatusCode::NOT_FOUND, description = "Specified chapter page was not found", body = ErrorResponse),
         (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorResponse),
     ),
     tag = "Chapters API"

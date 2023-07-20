@@ -131,10 +131,19 @@ pub struct CreateChapter {
     pub number: i32,
 }
 
-#[derive(AsChangeset, Deserialize, ToSchema, Debug)]
+#[derive(AsChangeset, Deserialize, ToSchema, Debug, TS)]
 #[diesel(table_name = comic_chapters)]
+#[ts(export)]
 pub struct UpdateChapter {
     pub title: Option<String>,
+    pub description: Option<String>,
+    pub number: Option<i32>,
+}
+
+#[derive(AsChangeset, Deserialize, ToSchema, Debug, TS)]
+#[diesel(table_name = chapter_pages)]
+#[ts(export)]
+pub struct UpdateChapterPage {
     pub description: Option<String>,
     pub number: Option<i32>,
 }
@@ -166,18 +175,18 @@ pub struct ChapterResponseBrief {
 #[derive(ToSchema)]
 #[allow(dead_code)]
 pub struct CreateChapterPage {
-    chapter_id: Uuid,
-    comic_id: Uuid,
     number: u32,
     description: Option<String>,
     #[schema(value_type = String, format = Binary)]
     image: fs::File,
 }
 
-#[derive(Builder, Deserialize, ToSchema)]
+#[derive(Builder, Deserialize, ToSchema, Debug)]
 #[builder(pattern = "owned")]
+#[builder(derive(Debug))]
 pub struct ChapterPageData {
     pub number: i32,
+    #[builder(default = "None")]
     pub description: Option<String>,
 }
 
