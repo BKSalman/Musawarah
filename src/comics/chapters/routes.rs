@@ -13,6 +13,7 @@ use diesel_async::{scoped_futures::ScopedFutureExt, AsyncConnection, RunQueryDsl
 use futures::TryStreamExt;
 use garde::Validate;
 use itertools::multizip;
+use serde::Deserialize;
 use serde_json::json;
 use tempfile::tempfile;
 use tokio::{
@@ -63,7 +64,10 @@ pub fn chapters_router() -> Router<AppState> {
         .route("/chapters/:chapter_id", put(update_chapter))
         .route("/chapters/:chapter_id/s", get(get_chapter))
         .route("/chapters/:chapter_id/rate", post(rate_chapter))
-        .route("/chapters/page", post(create_chapter_page))
+        .route(
+            "/:comic_id/:chapter_id/chapters/pages",
+            post(create_chapter_page),
+        )
 }
 
 /// Create a chapter
@@ -108,10 +112,16 @@ pub async fn create_chapter(
     Ok(Json(chapter.into_response_brief(vec![])))
 }
 
+#[derive(Deserialize)]
+pub struct ChapterPagePathParams {
+    comic_id: Uuid,
+    chapter_id: Uuid,
+}
+
 /// Create a chapter page
 #[utoipa::path(
     post,
-    path = "/api/v1/comics/chapters/page",
+    path = "/api/v1/comics/:comic_id/chapters/:chapter_id/pages",
     request_body(content = CreateChapterPage, content_type = "multipart/form-data"),
     responses(
         (status = 200, description = "Chapter page successfully created", body = ChapterResponse),
@@ -157,34 +167,6 @@ pub async fn create_chapter_page(
                                 tracing::error!("number field error: {:#?}", e);
                                 ChaptersError::BadRequest
                             })?,
-                    );
-                }
-                "comic_id" => {
-                    tracing::debug!("adding comic_id");
-
-                    chapter_page = chapter_page.comic_id(
-                        Uuid::parse_str(&field.text().await.map_err(|err| {
-                            tracing::error!("comic_id field error: {:#?}", err);
-                            ChaptersError::BadRequest
-                        })?)
-                        .map_err(|e| {
-                            tracing::error!("comic_id field error: {:#?}", e);
-                            ChaptersError::BadRequest
-                        })?,
-                    );
-                }
-                "chapter_id" => {
-                    tracing::debug!("adding chapter_id");
-
-                    chapter_page = chapter_page.chapter_id(
-                        Uuid::parse_str(&field.text().await.map_err(|err| {
-                            tracing::error!("chapter_id field error: {:#?}", err);
-                            ChaptersError::BadRequest
-                        })?)
-                        .map_err(|e| {
-                            tracing::error!("chapter_id field error: {:#?}", e);
-                            ChaptersError::BadRequest
-                        })?,
                     );
                 }
                 "image" => {
@@ -252,8 +234,8 @@ pub async fn create_chapter_page(
                 let chapter_page = ChapterPage {
                     id: Uuid::now_v7(),
                     user_id: auth.current_user.id,
-                    comic_id: chapter_page.comic_id,
-                    chapter_id: chapter_page.chapter_id,
+                    comic_id: path_params.comic_id,
+                    chapter_id: path_params.chapter_id,
                     number: chapter_page.number,
                     description: chapter_page.description,
                     path: upload.path,

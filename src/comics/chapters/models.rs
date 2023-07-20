@@ -59,6 +59,7 @@ impl Chapter {
                 })
                 .collect(),
             rating: average_rating(chapter_ratings),
+            author_id: self.user_id,
         }
     }
 
@@ -142,6 +143,7 @@ pub struct UpdateChapter {
 #[ts(export)]
 pub struct ChapterResponse {
     pub id: Uuid,
+    pub author_id: Uuid,
     pub title: String,
     pub rating: f64,
     pub number: i32,
@@ -175,8 +177,6 @@ pub struct CreateChapterPage {
 #[derive(Builder, Deserialize, ToSchema)]
 #[builder(pattern = "owned")]
 pub struct ChapterPageData {
-    pub chapter_id: Uuid,
-    pub comic_id: Uuid,
     pub number: i32,
     pub description: Option<String>,
 }
