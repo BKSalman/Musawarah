@@ -1,9 +1,19 @@
 body {
   min-height: 100vh;
   display: flex;
-  flex-direction:column;
+  flex-direction: column;
 }
 
 .link {
+  display: flex;
+  cursor: pointer;
   text-decoration: none;
+  background: none;
+  border: none;
+  line-height: 1.5rem;
+}
+
+
+.link>* {
+  color: black
 }

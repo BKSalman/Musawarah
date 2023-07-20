@@ -1,29 +1,47 @@
 <script lang="ts">
     import Text from "$lib/components/Text.svelte";
     import Fa from "svelte-fa";
-    import { faHome, faPenToSquare } from "@fortawesome/free-solid-svg-icons";
+    import { faHome, faPenToSquare, faPersonWalking } from "@fortawesome/free-solid-svg-icons";
     import { currentUser } from "../../routes/stores";
 
     export let open: boolean;
+
+    async function logout() {
+        await fetch("http://localhost:6060/api/v1/users/logout", {
+            credentials: "include",
+        });
+        await currentUser.refresh();
+    }
 </script>
 
 <nav class:expanded={open}>
     <ul>
         <li>
-            <a class="link" href="/"
-                ><Fa size="1.5x" icon={faHome} />
-                {#if open}<Text fontSize="xl" --margin="0 0 0 1rem">Home</Text
-                    >{/if}</a
-            >
+            <a class="link" href="/">
+                <Fa size="1.5x" icon={faHome} />
+                {#if open}
+                    <Text fontSize="xl" --margin="0 0 0 1rem">Home</Text>
+                {/if}
+            </a>
         </li>
         {#if $currentUser}
             <li>
-                <a class="link" href="/new-comic"
-                    ><Fa size="1.5x" icon={faPenToSquare} />
-                    {#if open}<Text fontSize="xl" --margin="0 0 0 1rem"
-                            >New comic</Text
-                        >{/if}</a
-                >
+                <a class="link" href="/new-comic">
+                    <Fa size="1.5x" icon={faPenToSquare} />
+                    {#if open}
+                        <Text fontSize="xl" --margin="0 0 0 1rem"
+                            >New comic</Text>
+                    {/if}
+                </a>
+            </li>
+            <li>
+                <button class="link" on:click={logout}>
+                    <Fa size="2.5x" icon={faPersonWalking} />
+                    {#if open}
+                        <Text fontSize="xl" --margin="0 0 0 1rem"
+                            >New comic</Text>
+                    {/if}
+                </button>
             </li>
         {/if}
     </ul>
@@ -54,10 +72,5 @@
     li {
         width: 200px;
         height: 3.5rem;
-    }
-
-    a {
-        display: flex;
-        line-height: 1.5rem;
     }
 </style>
