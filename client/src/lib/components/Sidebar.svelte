@@ -39,7 +39,7 @@
                     <Fa size="2.5x" icon={faPersonWalking} />
                     {#if open}
                         <Text fontSize="xl" --margin="0 0 0 1rem"
-                            >New comic</Text>
+                            >Logout</Text>
                     {/if}
                 </button>
             </li>
