@@ -10,7 +10,7 @@ use crate::{
     schema::{sessions, users},
     sessions::{models::Session, SESSION_COOKIE_NAME},
     users::models::{User, UserResponseBrief, UserRole},
-    AppState, ErrorResponse, COOKIES_SECRET,
+    AppState, ErrorResponse,
 };
 
 // TODO: add generic for UserRole
@@ -63,7 +63,7 @@ impl<const USER_ROLE: u32> FromRequestParts<AppState> for AuthExtractor<USER_ROL
         parts: &mut axum::http::request::Parts,
         state: &AppState,
     ) -> std::result::Result<Self, Self::Rejection> {
-        let mut db = state.pool.get().await?;
+        let mut db = state.inner.pool.get().await?;
 
         let cookies =
             parts
@@ -73,8 +73,6 @@ impl<const USER_ROLE: u32> FromRequestParts<AppState> for AuthExtractor<USER_ROL
                     tracing::error!("auth-extractor: failed to get cookies: {error_message}");
                     AuthError::InvalidSession
                 })?;
-
-        let key = COOKIES_SECRET.get().expect("cookies secret key");
 
         #[allow(unused_mut)]
         let mut remove_cookie_on_fail = Cookie::build(SESSION_COOKIE_NAME, "")
@@ -94,7 +92,10 @@ impl<const USER_ROLE: u32> FromRequestParts<AppState> for AuthExtractor<USER_ROL
             remove_cookie_on_fail = remove_cookie_on_fail.domain("localhost");
         }
 
-        let session_id = match cookies.private(key).get(SESSION_COOKIE_NAME) {
+        let session_id = match cookies
+            .private(&state.inner.cookies_secret)
+            .get(SESSION_COOKIE_NAME)
+        {
             None => {
                 tracing::error!("auth-extractor: failed to get session_id cookie");
                 cookies.remove(remove_cookie_on_fail.finish());

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use axum::{
     extract::{Path, State},
@@ -9,10 +9,7 @@ use chrono::Utc;
 use diesel::BelongingToDsl;
 use diesel::GroupedBy;
 use diesel::{ExpressionMethods, QueryDsl};
-use diesel_async::{
-    pooled_connection::deadpool::Pool, scoped_futures::ScopedFutureExt, AsyncConnection,
-    AsyncPgConnection, RunQueryDsl,
-};
+use diesel_async::{scoped_futures::ScopedFutureExt, AsyncConnection, RunQueryDsl};
 use itertools::multizip;
 use uuid::Uuid;
 
@@ -22,7 +19,7 @@ use crate::{
     comics::models::Comic,
     schema::{comic_comments, comic_comments_mapping, comics, users},
     users::models::{User, UserResponseBrief, UserRole},
-    AppState,
+    AppState, InnerAppState,
 };
 
 use super::{models::ComicCommentMapping, ComicCommentsError};
@@ -47,10 +44,10 @@ pub fn comic_comments_router() -> Router<AppState> {
 #[axum::debug_handler(state = AppState)]
 pub async fn get_comments(
     _auth: AuthExtractor<{ UserRole::User as u32 }>,
-    State(pool): State<Pool<AsyncPgConnection>>,
+    State(state): State<Arc<InnerAppState>>,
     Path(comic_id): Path<Uuid>,
 ) -> Result<Json<Vec<ComicCommentResponse>>, ComicCommentsError> {
-    let mut db = pool.get().await?;
+    let mut db = state.pool.get().await?;
 
     let comic = comics::table
         .filter(comics::id.eq(comic_id))
@@ -163,11 +160,11 @@ pub async fn get_comments(
 #[axum::debug_handler(state = AppState)]
 pub async fn create_comment(
     auth: AuthExtractor<{ UserRole::User as u32 }>,
-    State(pool): State<Pool<AsyncPgConnection>>,
+    State(state): State<Arc<InnerAppState>>,
     Path(comic_id): Path<Uuid>,
     Json(payload): Json<CreateComicComment>,
 ) -> Result<Json<ComicCommentResponse>, ComicCommentsError> {
-    let mut db = pool.get().await?;
+    let mut db = state.pool.get().await?;
 
     let comment = db
         .transaction::<_, ComicCommentsError, _>(|transaction| {
@@ -236,10 +233,10 @@ pub async fn create_comment(
 #[axum::debug_handler(state = AppState)]
 pub async fn delete_comment(
     auth: AuthExtractor<{ UserRole::User as u32 }>,
-    State(pool): State<Pool<AsyncPgConnection>>,
+    State(state): State<Arc<InnerAppState>>,
     Path(comment_id): Path<Uuid>,
 ) -> Result<Json<Uuid>, ComicCommentsError> {
-    let mut db = pool.get().await?;
+    let mut db = state.pool.get().await?;
 
     let comment = diesel::delete(
         comic_comments::table

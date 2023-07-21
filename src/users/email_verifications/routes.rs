@@ -1,12 +1,15 @@
+use std::sync::Arc;
+
 use axum::extract::Path;
 use axum::routing::post;
 use axum::{extract::State, Router};
 use chrono::{Duration, Utc};
 use diesel::prelude::*;
-use diesel_async::{pooled_connection::deadpool::Pool, AsyncPgConnection, RunQueryDsl};
+use diesel_async::RunQueryDsl;
 use uuid::Uuid;
 
 use crate::schema::users;
+use crate::InnerAppState;
 use crate::{auth::AuthExtractor, schema::email_verifications, users::models::UserRole, AppState};
 
 use super::{models::EmailVerification, EmailVerificationError};
@@ -19,9 +22,9 @@ pub fn email_verification_router() -> Router<AppState> {
 
 pub async fn create_email_verification(
     auth: AuthExtractor<{ UserRole::User as u32 }>,
-    State(pool): State<Pool<AsyncPgConnection>>,
+    State(state): State<Arc<InnerAppState>>,
 ) -> Result<(), EmailVerificationError> {
-    let mut db = pool.get().await?;
+    let mut db = state.pool.get().await?;
     let email_verification = EmailVerification {
         id: Uuid::now_v7(),
         email: auth.current_user.email,
@@ -34,17 +37,17 @@ pub async fn create_email_verification(
         .execute(&mut db)
         .await?;
     email_verification
-        .send_email(auth.current_user.username)
+        .send_email(auth.current_user.username, state)
         .await?;
     Ok(())
 }
 
 pub async fn confirm_email(
     _auth: AuthExtractor<{ UserRole::User as u32 }>,
-    State(pool): State<Pool<AsyncPgConnection>>,
+    State(state): State<Arc<InnerAppState>>,
     Path(verification_id): Path<Uuid>,
 ) -> Result<(), EmailVerificationError> {
-    let mut db = pool.get().await?;
+    let mut db = state.pool.get().await?;
     let email_verification: EmailVerification = diesel::delete(
         email_verifications::table.filter(email_verifications::id.eq(&verification_id)),
     )

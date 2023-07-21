@@ -1,8 +1,7 @@
-use std::{fmt::Display, fs};
+use std::{fmt::Display, fs, sync::Arc};
 
 use axum::{extract::FromRef, response::IntoResponse};
 use diesel_async::{pooled_connection::deadpool::Pool, AsyncPgConnection};
-use once_cell::sync::OnceCell;
 use s3::interface::Storage;
 use serde::{Deserialize, Serialize};
 use tower_cookies::cookie::Key;
@@ -47,16 +46,19 @@ impl Config {
     }
 }
 
-#[derive(Clone, FromRef)]
-pub struct AppState {
+pub struct InnerAppState {
     pub pool: Pool<AsyncPgConnection>,
     pub storage: Storage,
+    pub cookies_secret: Key,
+    pub email_username: String,
+    pub email_password: String,
+    pub email_smtp_server: String,
 }
 
-pub static COOKIES_SECRET: OnceCell<Key> = OnceCell::new();
-pub static EMAIL_USERNAME: OnceCell<String> = OnceCell::new();
-pub static EMAIL_PASSWORD: OnceCell<String> = OnceCell::new();
-pub static EMAIL_SMTP_SERVER: OnceCell<String> = OnceCell::new();
+#[derive(Clone, FromRef)]
+pub struct AppState {
+    pub inner: Arc<InnerAppState>,
+}
 
 #[derive(OpenApi)]
 #[openapi(

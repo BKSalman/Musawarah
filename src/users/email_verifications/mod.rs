@@ -1,10 +1,12 @@
+use std::sync::Arc;
+
 use axum::{http::StatusCode, response::IntoResponse};
 use lettre::{
     message::header::ContentType, transport::smtp::authentication::Credentials, AsyncSmtpTransport,
     AsyncTransport, Message, Tokio1Executor,
 };
 
-use crate::{ErrorResponse, EMAIL_PASSWORD, EMAIL_SMTP_SERVER, EMAIL_USERNAME};
+use crate::{ErrorResponse, InnerAppState};
 
 use self::models::EmailVerification;
 
@@ -30,12 +32,12 @@ pub enum EmailVerificationError {
 }
 
 impl EmailVerification {
-    async fn send_email(&self, username: String) -> Result<(), EmailVerificationError> {
-        let email_username = EMAIL_USERNAME.get().expect("Email Username");
-        let email_password = EMAIL_PASSWORD.get().expect("Email Password");
-        let email_smtp_server = EMAIL_SMTP_SERVER.get().expect("Email SMTP Server");
-
-        let from = format!("Musawarah <{}>", email_username);
+    async fn send_email(
+        &self,
+        username: String,
+        state: Arc<InnerAppState>,
+    ) -> Result<(), EmailVerificationError> {
+        let from = format!("Musawarah <{}>", state.email_username);
         let to = format!("{} <{}>", username, self.email);
 
         // TODO: add pretty html to the email
@@ -49,10 +51,10 @@ impl EmailVerification {
                 self.id
             ))?;
 
-        let creds = Credentials::new(email_username.clone(), email_password.clone());
+        let creds = Credentials::new(state.email_username.clone(), state.email_password.clone());
 
         let mailer: AsyncSmtpTransport<Tokio1Executor> =
-            AsyncSmtpTransport::<Tokio1Executor>::relay(email_smtp_server)?
+            AsyncSmtpTransport::<Tokio1Executor>::relay(&state.email_smtp_server)?
                 .credentials(creds)
                 .build();
 
