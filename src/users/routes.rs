@@ -191,13 +191,15 @@ pub async fn login(
     payload.validate(&())?;
 
     let mut db = state.pool.get().await?;
-
-    if let Some(session_id) = cookies
-        .private(&state.cookies_secret)
-        .get(SESSION_COOKIE_NAME)
-    {
-        tracing::error!("user already logged in with session id: {session_id}");
-        return Err(UsersError::AlreadyLoggedIn);
+    if let Some(session_id) = cookies.private(&state.cookies_secret).get(SESSION_COOKIE_NAME) {
+        if let Ok(session) = sessions::table
+            .filter(sessions::id.eq(Uuid::parse_str(session_id.value()).unwrap()))
+            .first::<Session>(&mut db)
+            .await
+        {
+            tracing::error!("user already logged in with session id: {}", session.id);
+            return Err(UsersError::AlreadyLoggedIn);
+        }
     }
 
     // argon2 is a good algorithm (not a security expert :))
