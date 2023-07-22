@@ -19,12 +19,10 @@
 <br/>
 <div class="pages">
     {#each chapter.pages as page}
-      <div class="">{page.number}</div>
       {#if page.description}
           <div class="">{page.description}</div>
       {/if}
-      <img src={`https://pub-26fa98a6ad0f4dd388ce1e8e1450be41.r2.dev/${page.image.path}`} alt="page"/>
-      <div class="">{page.number}</div>
+      <img class="page-image" src={`https://pub-26fa98a6ad0f4dd388ce1e8e1450be41.r2.dev/${page.image.path}`} alt="page"/>
     {/each}
 </div>
 </div>
@@ -45,5 +43,8 @@
     margin-right: 20px;
     background-color: #ffffff;
     box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+}
+.page-image {
+    width: 100%;
 }
 </style>

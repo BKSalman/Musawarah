@@ -1,23 +1,18 @@
 <script lang="ts">
     import Fa from "svelte-fa";
-    import type { PageData } from "./$types";
     import type { UpdateChapter } from "bindings/UpdateChapter";
     import { faX } from "@fortawesome/free-solid-svg-icons";
+    import { invalidate } from "$app/navigation";
 
-    export let data: PageData;
-    const { chapter, comic_id } = data;
+    export let data;
+
+    $: ({chapter, comic_id} = data);
+
     const acceptedFileTypes = ["image/png", "image/jpeg", "image/jpg"];
+    
+    $: currentChapterNumber = chapter.number;
 
-    let currentChapterNumber = chapter.number;
-
-    const chapterPages = chapter.pages.map((p) => {
-      return {
-        page_id: p.id,
-        path: `https://pub-26fa98a6ad0f4dd388ce1e8e1450be41.r2.dev/${p.image.path}`,
-      }
-    });
-
-    let pages: any[] = [...chapterPages];
+    let pages: any[] = [];
 
     function addImagesFromInput(e: Event) {
         const input = e.target as HTMLInputElement;
@@ -40,14 +35,19 @@
         reader.readAsDataURL(file);
     }
 
-    async function deleteChapterPage(page: any) {
-        if (!page.file) {
-          const deleteRes = await fetch(`http://localhost:6060/api/v1/comics/chapters/pages/${page.page_id}`, {
-            method: "DELETE",
-            credentials: "include",
-          });
-          console.log(deleteRes.statusText);
-        }
+    async function deleteServerChapterPage(page_id: string) {
+        console.log(page_id);
+        const deleteRes = await fetch(`http://localhost:6060/api/v1/comics/chapters/pages/${page_id}`, {
+          method: "DELETE",
+          credentials: "include",
+        });
+        console.log(deleteRes.statusText);
+        chapter.pages.splice(chapter.pages.findIndex((p) => p.id === page_id), 1);
+        chapter.pages = chapter.pages;
+        chapter = chapter;
+    }
+
+    async function deleteClientChapterPage(page: any) {
         pages.splice(pages.findIndex((p) => p.path === page.path), 1);
         pages = pages;
     }
@@ -65,26 +65,13 @@
 
            result.push({
             file: page.file,
-            number: i + 1,
+            number: chapter.pages.length + i + 1,
             path: page.path,
           });
 
           return result;
         }, []);
 
-        const updatePages = pages.reduce((result, page, i) => {
-          if (page.file) return result;
-
-          const chapterPageIndex = chapter.pages.findIndex((chapterPage) => `https://pub-26fa98a6ad0f4dd388ce1e8e1450be41.r2.dev/${chapterPage.image.path}` === page.path);
-          if (i !== chapterPageIndex) {
-            result.push({
-              page_id: chapter.pages[chapterPageIndex].id,
-              number: i + 1,
-            });
-          }
-          return result;
-        }, []);
-        
         // TODO: add option to change desc and title
         
         if (currentChapterNumber !== chapter.number) {
@@ -106,22 +93,11 @@
 
           // TODO: handle error
           console.log(createRes.statusText);
-        }
 
-        for (const page of updatePages) {
-          const updateRes = await fetch(`http://localhost:6060/api/v1/comics/chapters/pages/${page.page_id}`, {
-            headers: {
-              "Content-type": "application/json",
-            },
-            method: "PUT",
-            credentials: "include",
-            body: JSON.stringify({
-              number: page.number,
-            }),
-          });
-
-          // TODO: handle error
-          console.log(updateRes.statusText);
+          invalidate("chapter-info");
+          pages.splice(pages.findIndex((p) => p.path === page.path) - 1, 1);
+          pages = pages;
+          chapter.pages = chapter.pages;
         }
     }
 </script>
@@ -140,6 +116,7 @@
     <label for="chapter_number">Chapter Number:</label>
     <input type="number" id="chapter_number" min="1" name="chapter_number" required bind:value={currentChapterNumber}>
     <label for="chapter_pages">Chapter Pages:</label>
+    <!-- files drop zone -->
     <div role="region" class="drop-zone" on:dragover={(e) => {
       e.preventDefault();
       if (!e.dataTransfer) return;
@@ -153,10 +130,17 @@
             }
         }
     }}>
-        {#if pages.length < 1}
+        {#if pages.length < 1 && chapter.pages.length < 1}
             <span class="drop-zone-text">Drop images to upload</span>
         {/if}
-        <!-- TODO: also list already uploaded images -->
+        <!-- already uploaded images -->
+        {#each chapter.pages as page}
+            <div role="region" class="drop-zone-image-container" >
+              <button class="drop-zone-image-x" on:click={() => deleteServerChapterPage(page.id)} ><Fa size="1.5x" icon={faX}/></button>
+              <img class="server-image" src={`https://pub-26fa98a6ad0f4dd388ce1e8e1450be41.r2.dev/${page.image.path}`} alt="">
+            </div>
+        {/each}
+        <!-- client side images (not yet uploaded) -->
         {#each pages as page, other (other)}
             <div role="region" class="drop-zone-image-container" on:dragover={(e) => {
                 e.preventDefault();
@@ -176,15 +160,17 @@
               pages.splice(other, 0, currentDraggingPage);
               pages = pages;
             }}>
-              <button class="drop-zone-image-x" on:click={() => deleteChapterPage(pages[other])} ><Fa size="1.5x" icon={faX}/></button>
+              <button class="drop-zone-image-x" on:click={() => deleteClientChapterPage(pages[other])} ><Fa size="1.5x" icon={faX}/></button>
               <img class="drop-zone-image" src={page.path} alt="">
             </div>
         {/each}
     </div>
     <input multiple on:input={addImagesFromInput} type="file" accept={acceptedFileTypes.join(",")}>
-    <label for="publish">Publish Chapter:</label>
-    <input type="checkbox" id="publish" name="publish">
-    <input type="submit" value="Submit">
+    <div class="something">
+        <label for="publish">Publish Chapter:</label>
+        <input type="checkbox" id="publish" name="publish">
+        <input type="submit" value="Submit">
+    </div>
   </form>
 </div>
 
@@ -215,6 +201,10 @@
       width: 100%;
       height: 100%;
     }
+    .server-image {
+      width: 100%;
+      height: 100%;
+    }
     .drop-zone-image-x {
         background: none;
         border: none;
@@ -226,21 +216,6 @@
       color: #009688;
       text-decoration: none;
     }
-    a:hover {
-      text-decoration: underline;
-    }
-    /* Layout styles for form */
-    .container {
-      max-width: 500px;
-      margin: 0 auto;
-      padding: 20px;
-      background-color: #fff;
-      border-radius: 4px;
-      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-    }
-    .form-group {
-      margin-bottom: 20px;
-    }
     label {
       display: block;
       margin-bottom: 5px;
@@ -249,8 +224,7 @@
     }
     input[type="text"],
     input[type="number"],
-    input[type="file"],
-    input[type="checkbox"] {
+    input[type="file"] {
       display: block;
       width: 100%;
       padding: 10px;
@@ -288,5 +262,12 @@
       display: inline-block;
       margin-right: 10px;
       cursor: pointer;
+    }
+    .something {
+      margin-top: 1.5rem;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 1.5rem;
     }
 </style>

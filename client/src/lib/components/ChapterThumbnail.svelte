@@ -18,7 +18,7 @@
     min-height: 1.5rem;
     max-width: fit-content;
     max-height: fit-content;
-    background: black;
+    background: #AAAAAA;
 }
 </style>
 

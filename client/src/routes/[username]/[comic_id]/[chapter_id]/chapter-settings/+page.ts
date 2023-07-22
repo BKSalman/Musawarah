@@ -2,9 +2,10 @@ import { error, redirect } from '@sveltejs/kit';
 import type { PageLoad } from './$types';
 import type { ChapterResponse } from 'bindings/ChapterResponse';
 
-export const load = (async ({ fetch, params }) => {
+export const load = (async ({ fetch, params, depends }) => {
     const { username, comic_id, chapter_id } = params;
     
+    depends("chapter-info");
     const res = await fetch(`http://localhost:6060/api/v1/comics/chapters/${chapter_id}/s`, {
         credentials: "include",
     });
