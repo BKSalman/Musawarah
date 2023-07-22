@@ -29,6 +29,9 @@ pub enum EmailVerificationError {
 
     #[error(transparent)]
     BodyCreationError(#[from] lettre::error::Error),
+
+    #[error("User is already verified")]
+    AlreadyVerified,
 }
 
 impl EmailVerification {
@@ -84,6 +87,14 @@ impl IntoResponse for EmailVerificationError {
             Self::PoolError(_) => (StatusCode::INTERNAL_SERVER_ERROR).into_response(),
             Self::EmailSendError(_) => (StatusCode::INTERNAL_SERVER_ERROR).into_response(),
             Self::BodyCreationError(_) => (StatusCode::INTERNAL_SERVER_ERROR).into_response(),
+            Self::AlreadyVerified => (
+                StatusCode::BAD_REQUEST,
+                ErrorResponse {
+                    error: self.to_string(),
+                    ..Default::default()
+                },
+            )
+                .into_response(),
             Self::ExpiredEmail => (
                 StatusCode::GONE,
                 ErrorResponse {

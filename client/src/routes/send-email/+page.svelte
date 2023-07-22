@@ -1,5 +1,8 @@
 <script lang="ts">
+  // TODO: I feel that this might be better if done on a page.server.ts, just a feeling, invesitaget later ™
+  import { goto } from "$app/navigation";
   import { onMount } from "svelte";
+  export let data;
   let message: string | null = null;
   let send_email = async () => {
     message = null;
@@ -17,6 +20,10 @@
     }
   };
   onMount(async () => {
+    if (data.user?.role != "user") {
+      await goto("/");
+      return;
+    }
     await send_email();
   });
 </script>

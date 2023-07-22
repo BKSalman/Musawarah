@@ -1,3 +1,4 @@
+import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 
 export const load = (async ({ fetch, params }) => {
@@ -13,6 +14,8 @@ export const load = (async ({ fetch, params }) => {
     return { message: "Your email has been verified! You may close this page." }
   } else if (res.status == 410) {
     return { message: "This link has expired, try to resend the email." }
+  } else if (res.status == 400) {
+    throw redirect(307, "/");
   } else {
     return { message: "Something went wrong." }
   }

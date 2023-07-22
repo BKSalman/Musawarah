@@ -35,6 +35,9 @@ pub async fn create_email_verification(
     auth: AuthExtractor<{ UserRole::User as u32 }>,
     State(state): State<Arc<InnerAppState>>,
 ) -> Result<(), EmailVerificationError> {
+    if auth.current_user.role != UserRole::User {
+        return Err(EmailVerificationError::AlreadyVerified);
+    }
     let mut db = state.pool.get().await?;
     let email_verification = EmailVerification {
         id: Uuid::now_v7(),
@@ -67,10 +70,13 @@ pub async fn create_email_verification(
     tag = "Email Verification API"
 )]
 pub async fn confirm_email(
-    _auth: AuthExtractor<{ UserRole::User as u32 }>,
+    auth: AuthExtractor<{ UserRole::User as u32 }>,
     State(state): State<Arc<InnerAppState>>,
     Path(verification_id): Path<Uuid>,
 ) -> Result<(), EmailVerificationError> {
+    if auth.current_user.role != UserRole::User {
+        return Err(EmailVerificationError::AlreadyVerified);
+    }
     let mut db = state.pool.get().await?;
     let email_verification: EmailVerification = diesel::delete(
         email_verifications::table.filter(email_verifications::id.eq(&verification_id)),

@@ -18,7 +18,19 @@ use crate::{
     common::models::ImageResponse,
     schema::{profile_images, users},
 };
-#[derive(Deserialize, Serialize, Debug, AsExpression, FromSqlRow, TS, Copy, Clone, ToSchema)]
+#[derive(
+    Deserialize,
+    Serialize,
+    Debug,
+    AsExpression,
+    FromSqlRow,
+    TS,
+    Copy,
+    Clone,
+    ToSchema,
+    PartialEq,
+    Eq,
+)]
 #[diesel(sql_type = crate::schema::sql_types::Userrole)]
 #[repr(u32)]
 #[serde(rename_all = "snake_case")]
