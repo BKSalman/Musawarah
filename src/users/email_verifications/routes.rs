@@ -16,8 +16,8 @@ use super::{models::EmailVerification, EmailVerificationError};
 
 pub fn email_verification_router() -> Router<AppState> {
     Router::new()
-        .route("/email_verification", post(create_email_verification))
-        .route("/confirm_email/:verification_id", post(confirm_email))
+        .route("/email-verification", post(create_email_verification))
+        .route("/confirm-email/:verification_id", post(confirm_email))
 }
 
 /// Send email

@@ -7,7 +7,7 @@
   let send_email = async () => {
     message = null;
     const res = await fetch(
-      "http://localhost:6060/api/v1/users/email_verification",
+      "http://localhost:6060/api/v1/users/email-verification",
       {
         credentials: "include",
         method: "POST",

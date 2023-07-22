@@ -4,7 +4,7 @@ import type { PageServerLoad } from './$types';
 export const load = (async ({ fetch, params }) => {
   const verification_id = params.id;
   const res = await fetch(
-    `http://localhost:6060/api/v1/users/confirm_email/${verification_id}`,
+    `http://localhost:6060/api/v1/users/confirm-email/${verification_id}`,
     {
       credentials: "include",
       method: "POST",
