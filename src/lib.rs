@@ -1,8 +1,7 @@
-use std::{fmt::Display, fs};
+use std::{fmt::Display, fs, sync::Arc};
 
 use axum::{extract::FromRef, response::IntoResponse};
 use diesel_async::{pooled_connection::deadpool::Pool, AsyncPgConnection};
-use once_cell::sync::OnceCell;
 use s3::interface::Storage;
 use serde::{Deserialize, Serialize};
 use tower_cookies::cookie::Key;
@@ -31,9 +30,12 @@ pub enum ConfigError {
     TomlError(#[from] toml::de::Error),
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Default)]
 pub struct Config {
     pub cookie_secret: String,
+    pub email_username: String,
+    pub email_password: String,
+    pub email_smtp_server: String,
 }
 
 impl Config {
@@ -44,13 +46,19 @@ impl Config {
     }
 }
 
-#[derive(Clone, FromRef)]
-pub struct AppState {
+pub struct InnerAppState {
     pub pool: Pool<AsyncPgConnection>,
     pub storage: Storage,
+    pub cookies_secret: Key,
+    pub email_username: String,
+    pub email_password: String,
+    pub email_smtp_server: String,
 }
 
-pub static COOKIES_SECRET: OnceCell<Key> = OnceCell::new();
+#[derive(Clone, FromRef)]
+pub struct AppState {
+    pub inner: Arc<InnerAppState>,
+}
 
 #[derive(OpenApi)]
 #[openapi(

@@ -1,5 +1,7 @@
 pub mod models;
 
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use axum::{
     extract::{FromRequestParts, State},
@@ -10,11 +12,11 @@ use axum::{
 };
 use chrono::{Duration, Utc};
 use diesel::{ExpressionMethods, QueryDsl};
-use diesel_async::{pooled_connection::deadpool::Pool, AsyncPgConnection, RunQueryDsl};
+use diesel_async::RunQueryDsl;
 use tower_cookies::Cookies;
 use uuid::Uuid;
 
-use crate::{schema::sessions, AppState, ErrorResponse, COOKIES_SECRET};
+use crate::{schema::sessions, AppState, ErrorResponse, InnerAppState};
 
 pub const SESSION_COOKIE_NAME: &str = "session_id";
 
@@ -63,7 +65,7 @@ impl FromRequestParts<AppState> for UserSession {
 
     async fn from_request_parts(
         parts: &mut axum::http::request::Parts,
-        _state: &AppState,
+        state: &AppState,
     ) -> Result<Self, Self::Rejection> {
         let cookies =
             parts
@@ -76,9 +78,10 @@ impl FromRequestParts<AppState> for UserSession {
                     SessionError::InvalidSession
                 })?;
 
-        let key = COOKIES_SECRET.get().expect("cookies secret key");
-
-        if let Some(session_id) = cookies.private(key).get(SESSION_COOKIE_NAME) {
+        if let Some(session_id) = cookies
+            .private(&state.inner.cookies_secret)
+            .get(SESSION_COOKIE_NAME)
+        {
             Ok(Self {
                 session_id: Some(Uuid::parse_str(session_id.value()).map_err(|e| {
                     tracing::error!("session-extractor: invalid session_id: {e}");
@@ -93,13 +96,13 @@ impl FromRequestParts<AppState> for UserSession {
 
 pub async fn refresh_session<B>(
     session: UserSession,
-    State(pool): State<Pool<AsyncPgConnection>>,
+    State(state): State<Arc<InnerAppState>>,
     request: Request<B>,
     next: Next<B>,
 ) -> Result<Response, SessionError> {
     tracing::info!("running refresh_session middleware");
 
-    let mut db = pool.get().await?;
+    let mut db = state.pool.get().await?;
 
     if let Some(session_id) = session.session_id {
         diesel::update(sessions::table.find(session_id))

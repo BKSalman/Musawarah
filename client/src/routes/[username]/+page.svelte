@@ -3,12 +3,22 @@
     const { comics, user } = data;
 </script>
 
-<div class="container">
+{#if user.role === "user"}
+    <div class="error-box">
+        <h2>Verify Your Email!</h2>
+        <!-- TODO: add more stuff on why a user needs to verify account -->
+        <p>
+            Click <a href="/send-email" class="send-email">here</a> to send an email
+            and verify your account.
+        </p>
+    </div>
+{/if}
+<div class="horizontal-container">
     <div class="sidebar">
         <h1>Profile</h1>
         <p><strong>Username: </strong>{user.username}</p>
         <p><strong>Display Name: </strong>{user.displayname}</p>
-        <img src={user.profile_image.path} />
+        <img src={user.profile_image.path} alt="profile" />
     </div>
     <div class="content">
         <h1>Comics</h1>
@@ -24,7 +34,23 @@
 </div>
 
 <style>
-    .container {
+    .send-email {
+        text-decoration: underline;
+        font-weight: bold;
+    }
+
+    .error-box {
+        background-color: #fff3cd;
+        border: 1px solid #ffeeba;
+        color: #856404;
+        border-radius: 4px;
+        flex: 1;
+        padding: 10px;
+        margin-right: 20px;
+        margin-bottom: 20px;
+    }
+
+    .horizontal-container {
         display: flex;
         justify-content: center;
     }

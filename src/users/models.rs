@@ -18,10 +18,23 @@ use crate::{
     common::models::ImageResponse,
     schema::{profile_images, users},
 };
-#[derive(Deserialize, Serialize, Debug, AsExpression, FromSqlRow, TS, Copy, Clone, ToSchema)]
+#[derive(
+    Deserialize,
+    Serialize,
+    Debug,
+    AsExpression,
+    FromSqlRow,
+    TS,
+    Copy,
+    Clone,
+    ToSchema,
+    PartialEq,
+    Eq,
+)]
 #[diesel(sql_type = crate::schema::sql_types::Userrole)]
 #[repr(u32)]
 #[serde(rename_all = "snake_case")]
+#[ts(export)]
 pub enum UserRole {
     Admin,
     Staff,
@@ -113,6 +126,7 @@ pub struct UserResponse {
     pub username: String,
     pub email: String,
     pub profile_image: ImageResponse,
+    pub role: UserRole,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, TS)]

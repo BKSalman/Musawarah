@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use axum::{
     extract::{Path, Query, State},
     routing::{delete, get, post, put},
@@ -5,10 +7,7 @@ use axum::{
 };
 use chrono::Utc;
 use diesel::prelude::*;
-use diesel_async::{
-    pooled_connection::deadpool::Pool, scoped_futures::ScopedFutureExt, AsyncConnection,
-    AsyncPgConnection, RunQueryDsl,
-};
+use diesel_async::{scoped_futures::ScopedFutureExt, AsyncConnection, RunQueryDsl};
 use garde::Validate;
 use itertools::multizip;
 use uuid::Uuid;
@@ -21,7 +20,7 @@ use crate::{
     schema::{comic_genres, comic_genres_mapping, comic_ratings, comics, users},
     users::models::{User, UserResponseBrief, UserRole},
     utils::average_rating,
-    AppState,
+    AppState, InnerAppState,
 };
 
 use super::{
@@ -62,11 +61,11 @@ pub fn comics_router() -> Router<AppState> {
 )]
 pub async fn create_comic(
     auth: AuthExtractor<{ UserRole::User as u32 }>,
-    State(pool): State<Pool<AsyncPgConnection>>,
+    State(state): State<Arc<InnerAppState>>,
     Json(payload): Json<CreateComic>,
 ) -> Result<Json<ComicResponse>, ComicsError> {
     // save comic to db
-    let mut db = pool.get().await?;
+    let mut db = state.pool.get().await?;
 
     let comic_response = db
         .transaction::<_, ComicsError, _>(|transaction| {
@@ -155,10 +154,10 @@ pub async fn create_comic(
 #[axum::debug_handler(state = AppState)]
 pub async fn get_comic(
     _auth: AuthExtractor<{ UserRole::User as u32 }>,
-    State(pool): State<Pool<AsyncPgConnection>>,
+    State(state): State<Arc<InnerAppState>>,
     Path(comic_id): Path<Uuid>,
 ) -> Result<Json<ComicResponse>, ComicsError> {
-    let mut db = pool.get().await?;
+    let mut db = state.pool.get().await?;
 
     let (comic, user) = comics::table
         .filter(comics::id.eq(comic_id))
@@ -238,11 +237,11 @@ pub async fn get_comic(
 )]
 #[axum::debug_handler(state = AppState)]
 pub async fn get_comics(
-    State(pool): State<Pool<AsyncPgConnection>>,
+    State(state): State<Arc<InnerAppState>>,
     Query(params): Query<ComicsParams>,
 ) -> Result<Json<Vec<ComicResponse>>, ComicsError> {
     tracing::debug!("cursor: {:#?}", params);
-    let mut db = pool.get().await?;
+    let mut db = state.pool.get().await?;
 
     let mut comics_query = comics::table
         .inner_join(users::table)
@@ -357,11 +356,11 @@ pub async fn get_comics(
 #[axum::debug_handler(state = AppState)]
 pub async fn update_comic(
     auth: AuthExtractor<{ UserRole::User as u32 }>,
-    State(pool): State<Pool<AsyncPgConnection>>,
+    State(state): State<Arc<InnerAppState>>,
     Path(comic_id): Path<Uuid>,
     Json(payload): Json<UpdateComic>,
 ) -> Result<Json<Uuid>, ComicsError> {
-    let mut db = pool.get().await?;
+    let mut db = state.pool.get().await?;
 
     let updated_comic = diesel::update(
         comics::table
@@ -396,10 +395,10 @@ pub async fn update_comic(
 #[axum::debug_handler(state = AppState)]
 pub async fn delete_comic(
     auth: AuthExtractor<{ UserRole::User as u32 }>,
-    State(pool): State<Pool<AsyncPgConnection>>,
+    State(state): State<Arc<InnerAppState>>,
     Path(comic_id): Path<Uuid>,
 ) -> Result<Json<Uuid>, ComicsError> {
-    let mut db = pool.get().await?;
+    let mut db = state.pool.get().await?;
 
     let deleted_comic = diesel::delete(
         comics::table
@@ -427,13 +426,13 @@ pub async fn delete_comic(
 #[axum::debug_handler(state = AppState)]
 pub async fn rate_comic(
     auth: AuthExtractor<{ UserRole::VerifiedUser as u32 }>,
-    State(pool): State<Pool<AsyncPgConnection>>,
+    State(state): State<Arc<InnerAppState>>,
     Path(comic_id): Path<Uuid>,
     Json(payload): Json<NewComicRating>,
 ) -> Result<(), ComicsError> {
     payload.validate(&())?;
 
-    let mut db = pool.get().await?;
+    let mut db = state.pool.get().await?;
 
     match diesel::update(
         comic_ratings::table

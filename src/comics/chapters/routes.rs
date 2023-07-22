@@ -1,4 +1,4 @@
-use std::io::SeekFrom;
+use std::{io::SeekFrom, sync::Arc};
 
 use axum::{
     extract::{DefaultBodyLimit, Multipart, Path, Query, State},
@@ -9,10 +9,7 @@ use chrono::Utc;
 use diesel::BelongingToDsl;
 use diesel::GroupedBy;
 use diesel::{ExpressionMethods, QueryDsl, SelectableHelper};
-use diesel_async::{
-    pooled_connection::deadpool::Pool, scoped_futures::ScopedFutureExt, AsyncConnection,
-    AsyncPgConnection, RunQueryDsl,
-};
+use diesel_async::{scoped_futures::ScopedFutureExt, AsyncConnection, RunQueryDsl};
 use futures::TryStreamExt;
 use garde::Validate;
 use itertools::multizip;
@@ -32,10 +29,10 @@ use crate::{
         ChaptersParams,
     },
     common::models::ImageResponse,
-    s3::{interface::Storage, Upload},
+    s3::Upload,
     schema::{chapter_pages, chapter_ratings, comic_chapters},
     users::models::UserRole,
-    AppState, SortingOrder,
+    AppState, InnerAppState, SortingOrder,
 };
 
 use super::{
@@ -83,11 +80,11 @@ pub fn chapters_router() -> Router<AppState> {
 )]
 pub async fn create_chapter(
     auth: AuthExtractor<{ UserRole::User as u32 }>,
-    State(pool): State<Pool<AsyncPgConnection>>,
+    State(state): State<Arc<InnerAppState>>,
     Path(comic_id): Path<Uuid>,
     Json(payload): Json<CreateChapter>,
 ) -> Result<Json<ChapterResponseBrief>, ChaptersError> {
-    let mut db = pool.get().await?;
+    let mut db = state.pool.get().await?;
 
     let chapter = Chapter {
         id: Uuid::now_v7(),
@@ -126,11 +123,10 @@ pub async fn create_chapter(
 #[axum::debug_handler(state = AppState)]
 pub async fn create_chapter_page(
     auth: AuthExtractor<{ UserRole::User as u32 }>,
-    State(storage): State<Storage>,
-    State(pool): State<Pool<AsyncPgConnection>>,
+    State(state): State<Arc<InnerAppState>>,
     mut fields: Multipart,
 ) -> Result<Json<ChapterPageResponse>, ChaptersError> {
-    let mut db = pool.get().await?;
+    let mut db = state.pool.get().await?;
 
     let mut chapter_page = ChapterPageData::builder();
     let mut upload = Upload::builder();
@@ -271,7 +267,8 @@ pub async fn create_chapter_page(
                     .await?;
 
                 // upload image to s3
-                if let Err(err) = storage
+                if let Err(err) = state
+                    .storage
                     .put(
                         &chapter_page.path,
                         upload.stream,
@@ -321,10 +318,10 @@ pub async fn create_chapter_page(
 #[axum::debug_handler(state = AppState)]
 pub async fn get_chapter(
     _auth: AuthExtractor<{ UserRole::User as u32 }>,
-    State(pool): State<Pool<AsyncPgConnection>>,
+    State(state): State<Arc<InnerAppState>>,
     Path(chapter_id): Path<Uuid>,
 ) -> Result<Json<ChapterResponse>, ChaptersError> {
-    let mut db = pool.get().await?;
+    let mut db = state.pool.get().await?;
 
     let chapter = comic_chapters::table
         .find(chapter_id)
@@ -359,11 +356,11 @@ pub async fn get_chapter(
 #[axum::debug_handler(state = AppState)]
 pub async fn update_chapter(
     auth: AuthExtractor<{ UserRole::User as u32 }>,
-    State(pool): State<Pool<AsyncPgConnection>>,
+    State(state): State<Arc<InnerAppState>>,
     Path(chapter_id): Path<Uuid>,
     Json(payload): Json<UpdateChapter>,
 ) -> Result<Json<Uuid>, ChaptersError> {
-    let mut db = pool.get().await?;
+    let mut db = state.pool.get().await?;
 
     let chapter = diesel::update(
         comic_chapters::table
@@ -391,10 +388,10 @@ pub async fn update_chapter(
 #[axum::debug_handler(state = AppState)]
 pub async fn delete_chapter(
     auth: AuthExtractor<{ UserRole::User as u32 }>,
-    State(pool): State<Pool<AsyncPgConnection>>,
+    State(state): State<Arc<InnerAppState>>,
     Path(chapter_id): Path<Uuid>,
 ) -> Result<Json<Uuid>, ChaptersError> {
-    let mut db = pool.get().await?;
+    let mut db = state.pool.get().await?;
 
     let chapter = diesel::delete(
         comic_chapters::table
@@ -420,10 +417,10 @@ pub async fn delete_chapter(
 #[axum::debug_handler(state = AppState)]
 pub async fn delete_chapter_page(
     auth: AuthExtractor<{ UserRole::User as u32 }>,
-    State(pool): State<Pool<AsyncPgConnection>>,
+    State(state): State<Arc<InnerAppState>>,
     Path(chapter_page_id): Path<Uuid>,
 ) -> Result<Json<serde_json::Value>, ChaptersError> {
-    let mut db = pool.get().await?;
+    let mut db = state.pool.get().await?;
 
     let res = diesel::delete(
         chapter_pages::table
@@ -453,13 +450,13 @@ pub async fn delete_chapter_page(
 #[axum::debug_handler(state = AppState)]
 pub async fn rate_chapter(
     auth: AuthExtractor<{ UserRole::VerifiedUser as u32 }>,
-    State(pool): State<Pool<AsyncPgConnection>>,
+    State(state): State<Arc<InnerAppState>>,
     Path(chapter_id): Path<Uuid>,
     Json(payload): Json<NewChapterRating>,
 ) -> Result<(), ChaptersError> {
     payload.validate(&())?;
 
-    let mut db = pool.get().await?;
+    let mut db = state.pool.get().await?;
 
     match diesel::update(
         chapter_ratings::table
@@ -511,11 +508,11 @@ pub async fn rate_chapter(
 #[axum::debug_handler(state = AppState)]
 pub async fn get_chapters(
     _auth: AuthExtractor<{ UserRole::User as u32 }>,
-    State(pool): State<Pool<AsyncPgConnection>>,
+    State(state): State<Arc<InnerAppState>>,
     Query(params): Query<ChaptersParams>,
     Path(comic_id): Path<Uuid>,
 ) -> Result<Json<Vec<ChapterResponse>>, ChaptersError> {
-    let mut db = pool.get().await?;
+    let mut db = state.pool.get().await?;
 
     let mut chapters_query = comic_chapters::table
         .left_join(chapter_ratings::table)

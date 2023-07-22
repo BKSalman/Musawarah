@@ -3,6 +3,7 @@ use diesel::result::{DatabaseErrorKind, Error::DatabaseError};
 
 use crate::ErrorResponse;
 
+pub mod email_verifications;
 pub mod models;
 pub mod routes;
 
@@ -110,7 +111,9 @@ impl IntoResponse for UsersError {
                         "users_phone_number_key" => (
                             StatusCode::CONFLICT,
                             ErrorResponse {
-                                error: String::from("user with the same phone number already exists"),
+                                error: String::from(
+                                    "user with the same phone number already exists",
+                                ),
                                 ..Default::default()
                             },
                         )

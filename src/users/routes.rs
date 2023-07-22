@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use argon2::{
     password_hash::{PasswordHasher, PasswordVerifier, SaltString},
     Argon2, PasswordHash,
@@ -10,10 +12,7 @@ use axum::{
 use chrono::{Duration, Utc};
 use diesel::prelude::*;
 use diesel::GroupedBy;
-use diesel_async::{
-    pooled_connection::deadpool::Pool, scoped_futures::ScopedFutureExt, AsyncConnection,
-    AsyncPgConnection, RunQueryDsl,
-};
+use diesel_async::{scoped_futures::ScopedFutureExt, AsyncConnection, RunQueryDsl};
 use garde::Validate;
 use itertools::multizip;
 use time::OffsetDateTime;
@@ -37,10 +36,11 @@ use crate::{
     },
     users::models::User,
     utils::average_rating,
-    AppState, COOKIES_SECRET,
+    AppState, InnerAppState,
 };
 
 use super::{
+    email_verifications::routes::email_verification_router,
     models::{CreateUser, ProfileImage, UserLogin, UserResponse, UserResponseBrief, UserRole},
     UsersError,
 };
@@ -53,6 +53,7 @@ pub fn users_router() -> Router<AppState> {
         .route("/", post(create_user))
         .route("/login", post(login))
         .route("/me", get(me))
+        .nest("/", email_verification_router())
 }
 
 /// get user by cookie
@@ -86,7 +87,7 @@ pub async fn me(auth: AuthExtractor<{ UserRole::User as u32 }>) -> Json<UserResp
 )]
 #[axum::debug_handler(state = AppState)]
 pub async fn create_user(
-    State(state): State<AppState>,
+    State(state): State<Arc<InnerAppState>>,
     Json(payload): Json<CreateUser>,
 ) -> Result<Json<UserResponse>, UsersError> {
     payload.validate(&())?;
@@ -159,6 +160,7 @@ pub async fn create_user(
             path: profile_image.path,
             content_type: profile_image.content_type,
         },
+        role: user.role,
     }))
 }
 
@@ -180,7 +182,7 @@ pub async fn create_user(
 )]
 #[axum::debug_handler(state = AppState)]
 pub async fn login(
-    State(pool): State<Pool<AsyncPgConnection>>,
+    State(state): State<Arc<InnerAppState>>,
     cookies: Cookies,
     Json(payload): Json<UserLogin>,
 ) -> Result<(), UsersError> {
@@ -188,11 +190,8 @@ pub async fn login(
 
     payload.validate(&())?;
 
-    let mut db = pool.get().await?;
-
-    let key = COOKIES_SECRET.get().expect("cookies secret key");
-
-    if let Some(session_id) = cookies.private(key).get(SESSION_COOKIE_NAME) {
+    let mut db = state.pool.get().await?;
+    if let Some(session_id) = cookies.private(&state.cookies_secret).get(SESSION_COOKIE_NAME) {
         if let Ok(session) = sessions::table
             .filter(sessions::id.eq(Uuid::parse_str(session_id.value()).unwrap()))
             .first::<Session>(&mut db)
@@ -262,7 +261,7 @@ pub async fn login(
         cookie = cookie.domain("localhost");
     }
 
-    cookies.private(key).add(cookie.finish());
+    cookies.private(&state.cookies_secret).add(cookie.finish());
 
     Ok(())
 }
@@ -279,10 +278,10 @@ pub async fn login(
 #[axum::debug_handler(state = AppState)]
 pub async fn logout(
     cookies: Cookies,
-    State(pool): State<Pool<AsyncPgConnection>>,
+    State(state): State<Arc<InnerAppState>>,
     auth: AuthExtractor<{ UserRole::User as u32 }>,
 ) -> Result<(), UsersError> {
-    let mut db = pool.get().await?;
+    let mut db = state.pool.get().await?;
 
     diesel::delete(sessions::table.filter(sessions::id.eq(auth.session_id)))
         .execute(&mut db)
@@ -329,14 +328,14 @@ pub async fn logout(
 )]
 #[axum::debug_handler(state = AppState)]
 pub async fn get_user_comics(
-    State(pool): State<Pool<AsyncPgConnection>>,
+    State(state): State<Arc<InnerAppState>>,
     Path(username): Path<String>,
     Query(params): Query<ComicsParams>,
     _auth: AuthExtractor<{ UserRole::User as u32 }>,
 ) -> Result<Json<Vec<ComicResponse>>, UsersError> {
     tracing::debug!("get {}'s comics", username);
 
-    let mut db = pool.get().await?;
+    let mut db = state.pool.get().await?;
 
     let user = users::table
         .filter(users::username.eq(username))
@@ -440,11 +439,11 @@ pub async fn get_user_comics(
 )]
 #[axum::debug_handler(state = AppState)]
 pub async fn get_user(
-    State(pool): State<Pool<AsyncPgConnection>>,
+    State(state): State<Arc<InnerAppState>>,
     Path(username): Path<String>,
     _auth: AuthExtractor<{ UserRole::User as u32 }>,
 ) -> Result<Json<UserResponse>, UsersError> {
-    let mut db = pool.get().await?;
+    let mut db = state.pool.get().await?;
 
     let user = users::table
         .filter(users::username.eq(username))
@@ -466,6 +465,7 @@ pub async fn get_user(
             content_type: profile_image.content_type,
             path: profile_image.path,
         },
+        role: user.role,
     };
 
     Ok(Json(user))
