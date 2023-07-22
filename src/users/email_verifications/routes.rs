@@ -20,6 +20,17 @@ pub fn email_verification_router() -> Router<AppState> {
         .route("/confirm_email/:verification_id", post(confirm_email))
 }
 
+/// Send email
+#[utoipa::path(
+    post,
+    path = "/api/v1/users/email_verification",
+    responses(
+        (status = 200, description = "Verification email sent"),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorResponse),
+        (status = StatusCode::BAD_REQUEST, description = "User Already verified", body = ErrorResponse),
+    ),
+    tag = "Email Verification API"
+)]
 pub async fn create_email_verification(
     auth: AuthExtractor<{ UserRole::User as u32 }>,
     State(state): State<Arc<InnerAppState>>,
@@ -42,6 +53,19 @@ pub async fn create_email_verification(
     Ok(())
 }
 
+// Verify Email
+#[utoipa::path(
+    post,
+    path = "/api/v1/users/confirm_email/:verification_id",
+    responses(
+        (status = 200, description = "User's email has been verified"),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorResponse),
+        (status = StatusCode::NOT_FOUND, description = "No email with this id has been found", body = ErrorResponse),
+        (status = StatusCode::GONE, description = "Email has expired", body = ErrorResponse),
+        (status = StatusCode::BAD_REQUEST, description = "User Already verified", body = ErrorResponse),
+    ),
+    tag = "Email Verification API"
+)]
 pub async fn confirm_email(
     _auth: AuthExtractor<{ UserRole::User as u32 }>,
     State(state): State<Arc<InnerAppState>>,
