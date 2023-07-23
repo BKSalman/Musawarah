@@ -13,6 +13,7 @@ use diesel_async::{scoped_futures::ScopedFutureExt, AsyncConnection, RunQueryDsl
 use futures::TryStreamExt;
 use garde::Validate;
 use itertools::multizip;
+use serde::Deserialize;
 use serde_json::json;
 use tempfile::tempfile;
 use tokio::{
@@ -25,7 +26,7 @@ use tower_http::limit::RequestBodyLimitLayer;
 use crate::{
     auth::AuthExtractor,
     comics::chapters::{
-        models::{ChapterPage, ChapterRating, NewChapterRating},
+        models::{ChapterPage, ChapterRating, NewChapterRating, UpdateChapterPage},
         ChaptersParams,
     },
     common::models::ImageResponse,
@@ -63,7 +64,15 @@ pub fn chapters_router() -> Router<AppState> {
         .route("/chapters/:chapter_id", put(update_chapter))
         .route("/chapters/:chapter_id/s", get(get_chapter))
         .route("/chapters/:chapter_id/rate", post(rate_chapter))
-        .route("/chapters/page", post(create_chapter_page))
+        .route(
+            "/:comic_id/chapters/:chapter_id/pages",
+            post(create_chapter_page),
+        )
+        .route("/chapters/pages/:chapter_page_id", put(update_chapter_page))
+        .route(
+            "/chapters/pages/:chapter_page_id",
+            delete(delete_chapter_page),
+        )
 }
 
 /// Create a chapter
@@ -72,7 +81,7 @@ pub fn chapters_router() -> Router<AppState> {
     path = "/api/v1/comics/:comic_id/chapters",
     request_body(content = CreateChapter, content_type = "application/json"),
     responses(
-        (status = 200, description = "Chapter successfully created", body = UserResponse),
+        (status = 200, description = "Chapter successfully created", body = ChapterResponseBrief),
         (status = StatusCode::CONFLICT, description = "Chapter number conflicts with an already existing one", body = ErrorResponse),
         (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorResponse),
     ),
@@ -108,13 +117,19 @@ pub async fn create_chapter(
     Ok(Json(chapter.into_response_brief(vec![])))
 }
 
+#[derive(Deserialize)]
+pub struct ChapterPagePathParams {
+    comic_id: Uuid,
+    chapter_id: Uuid,
+}
+
 /// Create a chapter page
 #[utoipa::path(
     post,
-    path = "/api/v1/comics/chapters/page",
+    path = "/api/v1/comics/:comic_id/chapters/:chapter_id/pages",
     request_body(content = CreateChapterPage, content_type = "multipart/form-data"),
     responses(
-        (status = 200, description = "Chapter page successfully created", body = ChapterResponse),
+        (status = 200, description = "Chapter page successfully created", body = ChapterPageResponse),
         (status = StatusCode::BAD_REQUEST, description = "Fields validation error", body = ErrorResponse),
         (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorResponse),
     ),
@@ -124,6 +139,7 @@ pub async fn create_chapter(
 pub async fn create_chapter_page(
     auth: AuthExtractor<{ UserRole::User as u32 }>,
     State(state): State<Arc<InnerAppState>>,
+    Path(path_params): Path<ChapterPagePathParams>,
     mut fields: Multipart,
 ) -> Result<Json<ChapterPageResponse>, ChaptersError> {
     let mut db = state.pool.get().await?;
@@ -139,11 +155,11 @@ pub async fn create_chapter_page(
         if let Some(field_name) = field.name() {
             match field_name {
                 "description" => {
-                    tracing::debug!("adding description");
+                    tracing::debug!("adding chapter page description");
                     chapter_page = chapter_page.description(field.text().await.ok());
                 }
                 "number" => {
-                    tracing::debug!("adding chapter number");
+                    tracing::debug!("adding chapter page number");
                     chapter_page = chapter_page.number(
                         field
                             .text()
@@ -159,45 +175,21 @@ pub async fn create_chapter_page(
                             })?,
                     );
                 }
-                "comic_id" => {
-                    tracing::debug!("adding comic_id");
-
-                    chapter_page = chapter_page.comic_id(
-                        Uuid::parse_str(&field.text().await.map_err(|err| {
-                            tracing::error!("comic_id field error: {:#?}", err);
-                            ChaptersError::BadRequest
-                        })?)
-                        .map_err(|e| {
-                            tracing::error!("comic_id field error: {:#?}", e);
-                            ChaptersError::BadRequest
-                        })?,
-                    );
-                }
-                "chapter_id" => {
-                    tracing::debug!("adding chapter_id");
-
-                    chapter_page = chapter_page.chapter_id(
-                        Uuid::parse_str(&field.text().await.map_err(|err| {
-                            tracing::error!("chapter_id field error: {:#?}", err);
-                            ChaptersError::BadRequest
-                        })?)
-                        .map_err(|e| {
-                            tracing::error!("chapter_id field error: {:#?}", e);
-                            ChaptersError::BadRequest
-                        })?,
-                    );
-                }
                 "image" => {
-                    tracing::debug!("adding image");
+                    tracing::debug!("adding chapter page image");
                     if !ALLOWED_MIME_TYPES
                         .contains(&field.content_type().ok_or(ChaptersError::BadRequest)?)
                     {
+                        tracing::error!("wrong image type");
                         return Err(ChaptersError::BadRequest);
                     }
 
                     let file_name = field
                         .file_name()
-                        .ok_or(ChaptersError::BadRequest)?
+                        .ok_or_else(|| {
+                            tracing::error!("no file name");
+                            return ChaptersError::BadRequest;
+                        })?
                         .to_string();
 
                     let temp_file = tempfile().expect("temp file");
@@ -216,7 +208,7 @@ pub async fn create_chapter_page(
 
                     temp_file.seek(SeekFrom::Start(0)).await.expect("seek file");
 
-                    let s3_file_name = format!("{}_{}", file_name, Uuid::now_v7());
+                    let s3_file_name = format!("{}_{}", Uuid::now_v7(), file_name);
 
                     upload = upload
                         .path(s3_file_name)
@@ -239,11 +231,19 @@ pub async fn create_chapter_page(
         }
     }
 
-    let chapter_page = chapter_page
-        .build()
-        .map_err(|_| ChaptersError::BadRequest)?;
+    tracing::debug!("{:#?}", chapter_page);
 
-    let upload = upload.build().map_err(|_| ChaptersError::BadRequest)?;
+    let chapter_page = chapter_page.build().map_err(|e| {
+        tracing::error!("failed to build chapter page: {}", e);
+
+        ChaptersError::BadRequest
+    })?;
+
+    let upload = upload.build().map_err(|_| {
+        tracing::error!("failed to build upload");
+
+        ChaptersError::BadRequest
+    })?;
 
     let new_chapter_page = db
         .transaction::<_, ChaptersError, _>(|transaction| {
@@ -252,9 +252,10 @@ pub async fn create_chapter_page(
                 let chapter_page = ChapterPage {
                     id: Uuid::now_v7(),
                     user_id: auth.current_user.id,
-                    comic_id: chapter_page.comic_id,
-                    chapter_id: chapter_page.chapter_id,
+                    comic_id: path_params.comic_id,
+                    chapter_id: path_params.chapter_id,
                     number: chapter_page.number,
+                    description: chapter_page.description,
                     path: upload.path,
                     content_type: upload.content_type,
                     created_at: Utc::now(),
@@ -267,6 +268,7 @@ pub async fn create_chapter_page(
                     .await?;
 
                 // upload image to s3
+                tracing::debug!("uploading chapter page image");
                 if let Err(err) = state
                     .storage
                     .put(
@@ -295,6 +297,7 @@ pub async fn create_chapter_page(
     let chapter_page = ChapterPageResponse {
         id: new_chapter_page.id,
         number: new_chapter_page.number,
+        description: new_chapter_page.description,
         image: ImageResponse {
             path: new_chapter_page.path,
             content_type: new_chapter_page.content_type,
@@ -304,10 +307,43 @@ pub async fn create_chapter_page(
     Ok(Json(chapter_page))
 }
 
+/// Update chapter page
+#[utoipa::path(
+    put,
+    path = "/api/v1/comics/chapters/pages/:chapter_page_id",
+    request_body(content = UpdateChapter, content_type = "application/json"),
+    responses(
+        (status = 200, description = "Chapter page has successfully been updated", body = Uuid),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorResponse),
+    ),
+    tag = "Chapters API"
+)]
+#[axum::debug_handler(state = AppState)]
+pub async fn update_chapter_page(
+    auth: AuthExtractor<{ UserRole::User as u32 }>,
+    State(state): State<Arc<InnerAppState>>,
+    Path(chapter_page_id): Path<Uuid>,
+    Json(payload): Json<UpdateChapterPage>,
+) -> Result<Json<Uuid>, ChaptersError> {
+    let mut db = state.pool.get().await?;
+
+    let chapter_page = diesel::update(
+        chapter_pages::table
+            .filter(chapter_pages::id.eq(chapter_page_id))
+            .filter(chapter_pages::user_id.eq(auth.current_user.id)),
+    )
+    .set(&payload)
+    .returning(ChapterPage::as_returning())
+    .get_result(&mut db)
+    .await?;
+
+    Ok(Json(chapter_page.id))
+}
+
 /// Get chapter of a comic
 #[utoipa::path(
     get,
-    path = "/api/v1/comics/chapters/s/:chapter_id",
+    path = "/api/v1/comics/chapters/:chapter_id/s/",
     responses(
         (status = 200, description = "Get chapter", body = ChapterResponse),
         (status = StatusCode::NOT_FOUND, description = "Specified chapter not found", body = ErrorResponse),
@@ -348,7 +384,7 @@ pub async fn get_chapter(
     path = "/api/v1/comics/chapters/:chapter_id",
     request_body(content = UpdateChapter, content_type = "application/json"),
     responses(
-        (status = 200, body = Uuid),
+        (status = 200, description = "Chapter has successfully been updated", body = Uuid),
         (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorResponse),
     ),
     tag = "Chapters API"
@@ -380,7 +416,7 @@ pub async fn update_chapter(
     delete,
     path = "/api/v1/comics/chapters/:chapter_id",
     responses(
-        (status = 200, description = "Specified chapter has been successfully deleted"),
+        (status = 200, description = "Specified chapter has been successfully deleted", body = Uuid),
         (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorResponse),
     ),
     tag = "Chapters API"
@@ -410,6 +446,7 @@ pub async fn delete_chapter(
     path = "/api/v1/comics/chapters/page/:chapter_page_id",
     responses(
         (status = 200, description = "Specified chapter page has been successfully deleted"),
+        (status = StatusCode::NOT_FOUND, description = "Specified chapter page was not found", body = ErrorResponse),
         (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorResponse),
     ),
     tag = "Chapters API"
@@ -516,6 +553,7 @@ pub async fn get_chapters(
 
     let mut chapters_query = comic_chapters::table
         .left_join(chapter_ratings::table)
+        .order(comic_chapters::number.asc())
         .filter(comic_chapters::comic_id.eq(comic_id))
         .filter(comic_chapters::id.gt(params.min_id))
         .filter(comic_chapters::id.lt(params.max_id))

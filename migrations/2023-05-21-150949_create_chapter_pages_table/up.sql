@@ -2,6 +2,7 @@
 CREATE TABLE IF NOT EXISTS chapter_pages(
     id UUID PRIMARY KEY,
     number INTEGER NOT NULL,
+    description TEXT,
     path TEXT NOT NULL,
     content_type TEXT NOT NULL,
     comic_id UUID NOT NULL,

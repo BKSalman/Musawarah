@@ -86,6 +86,7 @@ impl IntoResponse for ChaptersError {
             )
                 .into_response(),
             ChaptersError::Diesel(diesel_error) => match diesel_error {
+                diesel::result::Error::NotFound => StatusCode::NOT_FOUND.into_response(),
                 DatabaseError(DatabaseErrorKind::UniqueViolation, message) => {
                     let constraint_name = message.constraint_name();
                     match constraint_name {

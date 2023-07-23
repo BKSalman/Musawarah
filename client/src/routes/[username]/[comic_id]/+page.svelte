@@ -52,7 +52,7 @@
     </div>
         <span>chapters:</span>
         {#if $currentUser && $currentUser.id == comic.author.id}
-            <button>New chapter</button>
+            <a href={`/${comic.author.username}/${comic.id}/new-chapter`}>New chapter</a>
         {/if}
         <div class="chapters">
             {#each comic.chapters as chapter}

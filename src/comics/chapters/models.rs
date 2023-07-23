@@ -23,7 +23,7 @@ use crate::{
 #[diesel(table_name = comic_chapters)]
 pub struct Chapter {
     pub id: Uuid,
-    pub title: Option<String>,
+    pub title: String,
     pub description: Option<String>,
     pub number: i32,
     pub created_at: DateTime<chrono::Utc>,
@@ -51,6 +51,7 @@ impl Chapter {
                 .map(|page| ChapterPageResponse {
                     id: page.id,
                     number: page.number,
+                    description: page.description,
                     image: ImageResponse {
                         content_type: page.content_type,
                         path: page.path,
@@ -58,6 +59,7 @@ impl Chapter {
                 })
                 .collect(),
             rating: average_rating(chapter_ratings),
+            author_id: self.user_id,
         }
     }
 
@@ -73,6 +75,7 @@ impl Chapter {
                 .map(|page| ChapterPageResponse {
                     id: page.id,
                     number: page.number,
+                    description: page.description,
                     image: ImageResponse {
                         content_type: page.content_type,
                         path: page.path,
@@ -91,6 +94,7 @@ impl Chapter {
 pub struct ChapterPage {
     pub id: Uuid,
     pub number: i32,
+    pub description: Option<String>,
     pub path: String,
     pub content_type: String,
     pub comic_id: Uuid,
@@ -119,17 +123,27 @@ impl Rating for ChapterRating {
     }
 }
 
-#[derive(Deserialize, ToSchema, Debug)]
+#[derive(Deserialize, ToSchema, Debug, TS)]
+#[ts(export)]
 pub struct CreateChapter {
-    pub title: Option<String>,
+    pub title: String,
     pub description: Option<String>,
     pub number: i32,
 }
 
-#[derive(AsChangeset, Deserialize, ToSchema, Debug)]
+#[derive(AsChangeset, Deserialize, ToSchema, Debug, TS)]
 #[diesel(table_name = comic_chapters)]
+#[ts(export)]
 pub struct UpdateChapter {
     pub title: Option<String>,
+    pub description: Option<String>,
+    pub number: Option<i32>,
+}
+
+#[derive(AsChangeset, Deserialize, ToSchema, Debug, TS)]
+#[diesel(table_name = chapter_pages)]
+#[ts(export)]
+pub struct UpdateChapterPage {
     pub description: Option<String>,
     pub number: Option<i32>,
 }
@@ -138,7 +152,8 @@ pub struct UpdateChapter {
 #[ts(export)]
 pub struct ChapterResponse {
     pub id: Uuid,
-    pub title: Option<String>,
+    pub author_id: Uuid,
+    pub title: String,
     pub rating: f64,
     pub number: i32,
     pub description: Option<String>,
@@ -150,29 +165,28 @@ pub struct ChapterResponse {
 #[ts(export)]
 pub struct ChapterResponseBrief {
     pub id: Uuid,
-    pub title: Option<String>,
+    pub title: String,
     pub number: i32,
     pub description: Option<String>,
-    pub created_at: DateTime<chrono::Utc>,
     pub pages: Vec<ChapterPageResponse>,
+    pub created_at: DateTime<chrono::Utc>,
 }
 
 #[derive(ToSchema)]
 #[allow(dead_code)]
 pub struct CreateChapterPage {
-    chapter_id: Uuid,
-    comic_id: Uuid,
     number: u32,
+    description: Option<String>,
     #[schema(value_type = String, format = Binary)]
     image: fs::File,
 }
 
-#[derive(Builder, Deserialize, ToSchema)]
+#[derive(Builder, Deserialize, ToSchema, Debug)]
 #[builder(pattern = "owned")]
+#[builder(derive(Debug))]
 pub struct ChapterPageData {
-    pub chapter_id: Uuid,
-    pub comic_id: Uuid,
     pub number: i32,
+    #[builder(default = "None")]
     pub description: Option<String>,
 }
 
@@ -188,6 +202,7 @@ impl ChapterPageData {
 pub struct ChapterPageResponse {
     pub id: Uuid,
     pub number: i32,
+    pub description: Option<String>,
     pub image: ImageResponse,
 }
 
