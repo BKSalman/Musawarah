@@ -3,18 +3,18 @@
     import type { ErrorResponse } from "bindings/ErrorResponse";
     import { setError, setMessage, superForm, superValidateSync } from "sveltekit-superforms/client";
     import { z } from "zod";
-    import type { PageData } from "./$types";
     import type { ChapterResponseBrief } from "bindings/ChapterResponseBrief";
 
-    export let data: PageData;
+    export let data;
 
-    const { username, comic_id } = data;
+    const { username, comic } = data;
+
+    console.log(comic.chapters);
 
     const chapterSchema = z.object({
       title: z.string().optional(),
       description: z.string().optional(),
-      // TODO: get chapter numbers from backend to check what are the taken numbers
-      number: z.number().default(1),
+      number: z.number().default(comic.chapters.length > 0 ? comic.chapters[comic.chapters.length - 1].number + 1 : 1),
     });
 
     const { form, errors, message, constraints, enhance } = superForm(
@@ -25,7 +25,7 @@
         onUpdate: async ({ form }) => {
           console.log(form.valid);
           if (form.valid) {
-            const res = await fetch(`http://localhost:6060/api/v1/comics/${comic_id}/chapters`, {
+            const res = await fetch(`http://localhost:6060/api/v1/comics/${comic.id}/chapters`, {
               credentials: "include",
               method: "POST",
               headers: {
@@ -57,7 +57,7 @@
 
             const response: ChapterResponseBrief = await res.json();
             // TODO: add user field to chapter response instead of using the slug
-            await goto(`/${username}/${comic_id}/${response.id}`);
+            await goto(`/${username}/${comic.id}/${response.id}`);
           }
         },
         onError({ result, message }) {
@@ -103,6 +103,7 @@
         type="number"
         id="chapter-number-input"
         name="chapter-number"
+        min={comic.chapters.length > 0 ? comic.chapters[comic.chapters.length - 1].number + 1 : 1}
         data-invalid={$errors.number}
         bind:value={$form.number}
         {...$constraints.number}
