@@ -139,6 +139,7 @@ pub struct ChapterPagePathParams {
 pub async fn create_chapter_page(
     auth: AuthExtractor<{ UserRole::User as u32 }>,
     State(state): State<Arc<InnerAppState>>,
+    Path(path_params): Path<ChapterPagePathParams>,
     mut fields: Multipart,
 ) -> Result<Json<ChapterPageResponse>, ChaptersError> {
     let mut db = state.pool.get().await?;
@@ -268,7 +269,8 @@ pub async fn create_chapter_page(
 
                 // upload image to s3
                 tracing::debug!("uploading chapter page image");
-                if let Err(err) = storage
+                if let Err(err) = state
+                    .storage
                     .put(
                         &chapter_page.path,
                         upload.stream,
@@ -319,11 +321,11 @@ pub async fn create_chapter_page(
 #[axum::debug_handler(state = AppState)]
 pub async fn update_chapter_page(
     auth: AuthExtractor<{ UserRole::User as u32 }>,
-    State(pool): State<Pool<AsyncPgConnection>>,
+    State(state): State<Arc<InnerAppState>>,
     Path(chapter_page_id): Path<Uuid>,
     Json(payload): Json<UpdateChapterPage>,
 ) -> Result<Json<Uuid>, ChaptersError> {
-    let mut db = pool.get().await?;
+    let mut db = state.pool.get().await?;
 
     let chapter_page = diesel::update(
         chapter_pages::table
