@@ -36,12 +36,10 @@
     }
 
     async function deleteServerChapterPage(page_id: string) {
-        console.log(page_id);
         const deleteRes = await fetch(`http://localhost:6060/api/v1/comics/chapters/pages/${page_id}`, {
           method: "DELETE",
           credentials: "include",
         });
-        console.log(deleteRes.statusText);
         chapter.pages.splice(chapter.pages.findIndex((p) => p.id === page_id), 1);
         chapter.pages = chapter.pages;
         chapter = chapter;
@@ -92,12 +90,10 @@
           });
 
           // TODO: handle error
-          console.log(createRes.statusText);
 
-          invalidate("chapter-info");
+          await invalidate("chapter-info");
           pages.splice(pages.findIndex((p) => p.path === page.path) - 1, 1);
           pages = pages;
-          chapter.pages = chapter.pages;
         }
     }
 </script>
@@ -166,7 +162,7 @@
         {/each}
     </div>
     <input multiple on:input={addImagesFromInput} type="file" accept={acceptedFileTypes.join(",")}>
-    <div class="something">
+    <div class="submit-container">
         <label for="publish">Publish Chapter:</label>
         <input type="checkbox" id="publish" name="publish">
         <input type="submit" value="Submit">
@@ -263,7 +259,7 @@
       margin-right: 10px;
       cursor: pointer;
     }
-    .something {
+    .submit-container {
       margin-top: 1.5rem;
       display: flex;
       justify-content: center;

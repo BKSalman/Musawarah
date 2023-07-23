@@ -12,7 +12,7 @@
     console.log(comic.chapters);
 
     const chapterSchema = z.object({
-      title: z.string().optional(),
+      title: z.string(),
       description: z.string().optional(),
       number: z.number().default(comic.chapters.length > 0 ? comic.chapters[comic.chapters.length - 1].number + 1 : 1),
     });
