@@ -551,6 +551,7 @@ pub async fn get_chapters(
 
     let mut chapters_query = comic_chapters::table
         .left_join(chapter_ratings::table)
+        .order(comic_chapters::number.asc())
         .filter(comic_chapters::comic_id.eq(comic_id))
         .filter(comic_chapters::id.gt(params.min_id))
         .filter(comic_chapters::id.lt(params.max_id))
