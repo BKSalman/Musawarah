@@ -69,7 +69,7 @@
           setMessage(form, "تم الانشاء بنجاح!");
 
           const response: ComicResponse = await res.json();
-          await goto(`/${response.author.username}/${response.id}`);
+          await goto(`/${response.author.username}/${response.slug}`);
         }
       },
       onError({ result, message }) {

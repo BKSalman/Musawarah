@@ -28,6 +28,7 @@ use super::{
     comic_comments::routes::comic_comments_router,
     comic_genres::routes::comic_genres_router,
     models::{Comic, ComicRating, ComicResponse, CreateComic, UpdateComic},
+    utils::slugify,
     ComicsError, ComicsParams,
 };
 
@@ -38,6 +39,7 @@ pub fn comics_router() -> Router<AppState> {
         .route("/:comic_id", put(update_comic))
         .route("/:comic_id", delete(delete_comic))
         .route("/:comic_id", get(get_comic))
+        .route("/by_slug/:slug", get(get_comic_by_slug))
         .route("/:comic_id/rate", post(rate_comic))
         .nest("/", comic_genres_router())
         .nest("/", comic_comments_router())
@@ -72,6 +74,7 @@ pub async fn create_comic(
             async move {
                 let comic = Comic {
                     id: Uuid::now_v7(),
+                    slug: slugify(&payload.title),
                     user_id: auth.current_user.id,
                     title: payload.title,
                     description: payload.description,
@@ -93,6 +96,7 @@ pub async fn create_comic(
                     id: comic.id,
                     author: auth.current_user,
                     title: comic.title.to_string(),
+                    slug: comic.slug.to_string(),
                     description: comic.description.clone(),
                     rating: 0.0,
                     created_at: comic.created_at.to_string(),
@@ -203,6 +207,93 @@ pub async fn get_comic(
             role: user.role,
         },
         title: comic.title,
+        slug: comic.slug,
+        description: comic.description,
+        rating: average_rating(comic_ratings),
+        created_at: comic.created_at.to_string(),
+        chapters: chapters_and_pages
+            .into_iter()
+            .map(|(chapter, pages)| chapter.into_response_brief(pages))
+            .collect(),
+        genres: genres
+            .into_iter()
+            .map(|genre| ComicGenre {
+                id: genre.id,
+                name: genre.name,
+            })
+            .collect(),
+    };
+
+    Ok(Json(comic))
+}
+
+/// Get comic by slug
+#[utoipa::path(
+    get,
+    path = "/api/v1/comics/by_slug/:slug",
+    responses(
+        (status = 200, description = "Caller authorized. returned requested comic", body = ComicResponse),
+        (status = StatusCode::UNAUTHORIZED, description = "Caller unauthorized", body = ErrorResponse ),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorResponse),
+    ),
+    security(
+        ("auth" = [])
+    ),
+    tag = "Comics API"
+)]
+#[axum::debug_handler(state = AppState)]
+pub async fn get_comic_by_slug(
+    _auth: AuthExtractor<{ UserRole::User as u32 }>,
+    State(state): State<Arc<InnerAppState>>,
+    Path(slug): Path<String>,
+) -> Result<Json<ComicResponse>, ComicsError> {
+    let mut db = state.pool.get().await?;
+
+    let (comic, user) = comics::table
+        .filter(comics::slug.eq(slug))
+        .inner_join(users::table)
+        .select((Comic::as_select(), User::as_select()))
+        .first::<(Comic, User)>(&mut db)
+        .await?;
+
+    let chapters = Chapter::belonging_to(&comic)
+        .load::<Chapter>(&mut db)
+        .await?;
+
+    let chapter_pages = ChapterPage::belonging_to(&chapters)
+        .select(ChapterPage::as_select())
+        .load::<ChapterPage>(&mut db)
+        .await?;
+
+    let chapters_and_pages = chapter_pages
+        .grouped_by(&chapters)
+        .into_iter()
+        .zip(chapters)
+        .map(|(p, c)| (c, p))
+        .collect::<Vec<(Chapter, Vec<ChapterPage>)>>();
+
+    let genres = GenreMapping::belonging_to(&comic)
+        .inner_join(comic_genres::table)
+        .select(Genre::as_select())
+        .load(&mut db)
+        .await?;
+
+    let comic_ratings = ComicRating::belonging_to(&comic)
+        .select(ComicRating::as_select())
+        .load(&mut db)
+        .await?;
+
+    let comic = ComicResponse {
+        id: comic.id,
+        author: UserResponseBrief {
+            id: user.id,
+            displayname: user.displayname,
+            username: user.username,
+            email: user.email,
+            role: user.role,
+        },
+        title: comic.title,
+        slug: comic.slug,
         description: comic.description,
         rating: average_rating(comic_ratings),
         created_at: comic.created_at.to_string(),
@@ -314,6 +405,7 @@ pub async fn get_comics(
                 Ok(ComicResponse {
                     id: comic.id,
                     title: comic.title,
+                    slug: comic.slug,
                     description: comic.description,
                     created_at: comic.created_at.to_string(),
                     rating: average_rating(comic_ratings),

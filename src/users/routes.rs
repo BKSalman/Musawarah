@@ -191,7 +191,10 @@ pub async fn login(
     payload.validate(&())?;
 
     let mut db = state.pool.get().await?;
-    if let Some(session_id) = cookies.private(&state.cookies_secret).get(SESSION_COOKIE_NAME) {
+    if let Some(session_id) = cookies
+        .private(&state.cookies_secret)
+        .get(SESSION_COOKIE_NAME)
+    {
         if let Ok(session) = sessions::table
             .filter(sessions::id.eq(Uuid::parse_str(session_id.value()).unwrap()))
             .first::<Session>(&mut db)
@@ -402,6 +405,7 @@ pub async fn get_user_comics(
                         role: user.role,
                     },
                     title: comic.title,
+                    slug: comic.slug,
                     description: comic.description,
                     rating: average_rating(comic_ratings),
                     created_at: comic.created_at.to_string(),

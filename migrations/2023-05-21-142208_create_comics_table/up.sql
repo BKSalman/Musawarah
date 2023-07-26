@@ -1,7 +1,8 @@
 -- Your SQL goes here
 CREATE TABLE IF NOT EXISTS comics (
     id UUID PRIMARY KEY,
-    title TEXT UNIQUE NOT NULL,
+    title TEXT NOT NULL,
+    slug TEXT NOT NULL,
     description TEXT,
     created_at TIMESTAMPTZ NOT NULL,
     updated_at TIMESTAMPTZ,
@@ -14,5 +15,7 @@ CREATE TABLE IF NOT EXISTS comics (
     FOREIGN KEY(user_id)
         REFERENCES users(id)
         ON DELETE CASCADE
-        ON UPDATE CASCADE
+        ON UPDATE CASCADE,
+
+    UNIQUE (user_id, slug)
 );

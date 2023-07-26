@@ -14,6 +14,7 @@ pub mod comic_comments;
 pub mod comic_genres;
 pub mod models;
 pub mod routes;
+mod utils;
 
 #[derive(Debug, Deserialize, IntoParams)]
 pub struct ComicsParams {

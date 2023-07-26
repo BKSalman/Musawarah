@@ -3,10 +3,10 @@ import type { PageLoad } from './$types';
 import type { ChapterResponse } from 'bindings/ChapterResponse';
 
 export const load = (async ({ fetch, params, depends }) => {
-    const { username, comic_id, chapter_number } = params;
+    const { username, comic_slug, chapter_number } = params;
 
     depends("chapter-info");
-    const res = await fetch(`http://localhost:6060/api/v1/comics/chapters/by_number/${comic_id}/${chapter_number}/`
+    const res = await fetch(`http://localhost:6060/api/v1/comics/chapters/by_slug/${username}/${comic_slug}/${chapter_number}/`
         , {
             credentials: "include",
         });
@@ -21,7 +21,7 @@ export const load = (async ({ fetch, params, depends }) => {
     const chapter: ChapterResponse = await res.json();
 
     return {
-        comic_id,
+        comic_id: chapter.comic_id,
         username,
         chapter,
     }

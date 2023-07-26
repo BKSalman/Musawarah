@@ -19,6 +19,7 @@ use crate::{
 pub struct Comic {
     pub id: Uuid,
     pub title: String,
+    pub slug: String,
     pub description: Option<String>,
     pub created_at: DateTime<chrono::Utc>,
     pub updated_at: Option<DateTime<chrono::Utc>>,
@@ -34,6 +35,7 @@ pub struct Comic {
 pub struct ComicResponse {
     pub id: Uuid,
     pub title: String,
+    pub slug: String,
     pub description: Option<String>,
     pub rating: f64,
     pub created_at: String,
