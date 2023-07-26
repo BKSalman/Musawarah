@@ -9,7 +9,7 @@
     {#if chapter.title}
       <span>{chapter.title}</span>
     {/if}
-    <a href={`${$page.url.pathname}/${chapter.id}`}><div>{chapter.number}</div></a>
+    <a href={`${$page.url.pathname}/${chapter.number}`}><div>{chapter.number}</div></a>
 </div>
 
 <style>

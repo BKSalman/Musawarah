@@ -62,6 +62,10 @@ pub fn chapters_router() -> Router<AppState> {
         .route("/:comic_id/chapters", get(get_chapters))
         .route("/chapters/:chapter_id", delete(delete_chapter))
         .route("/chapters/:chapter_id", put(update_chapter))
+        .route(
+            "/chapters/by_number/:comic_id/:chapter_number/",
+            get(get_chapter_by_number),
+        )
         .route("/chapters/:chapter_id/s", get(get_chapter))
         .route("/chapters/:chapter_id/rate", post(rate_chapter))
         .route(
@@ -361,6 +365,45 @@ pub async fn get_chapter(
 
     let chapter = comic_chapters::table
         .find(chapter_id)
+        .first::<Chapter>(&mut db)
+        .await?;
+
+    let chapter_pages = ChapterPage::belonging_to(&chapter)
+        .order(chapter_pages::number.asc())
+        .load::<ChapterPage>(&mut db)
+        .await?;
+
+    let chapter_ratings = ChapterRating::belonging_to(&chapter)
+        .load::<ChapterRating>(&mut db)
+        .await?;
+
+    let chapter = chapter.into_response(chapter_pages, chapter_ratings);
+
+    Ok(Json(chapter))
+}
+
+/// Get chapter of a comic by chapter number
+#[utoipa::path(
+    get,
+    path = "/api/v1/comics/chapters/by_number/:comic_id/:chapter_number/s/",
+    responses(
+        (status = 200, description = "Get chapter", body = ChapterResponse),
+        (status = StatusCode::NOT_FOUND, description = "Specified chapter not found", body = ErrorResponse),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorResponse),
+    ),
+    tag = "Chapters API"
+)]
+#[axum::debug_handler(state = AppState)]
+pub async fn get_chapter_by_number(
+    _auth: AuthExtractor<{ UserRole::User as u32 }>,
+    State(state): State<Arc<InnerAppState>>,
+    Path((comic_id, chapter_number)): Path<(Uuid, i32)>,
+) -> Result<Json<ChapterResponse>, ChaptersError> {
+    let mut db = state.pool.get().await?;
+
+    let chapter = comic_chapters::table
+        .filter(comic_chapters::comic_id.eq(comic_id))
+        .filter(comic_chapters::number.eq(chapter_number))
         .first::<Chapter>(&mut db)
         .await?;
 
