@@ -3,10 +3,10 @@ import type { PageServerLoad } from './$types';
 import type { ComicResponse } from 'bindings/ComicResponse';
 import type { ComicCommentResponse } from 'bindings/ComicCommentResponse';
 
-export const load = (async ({ fetch, params, cookies }) => {
+export const load = (async ({ fetch, params }) => {
     const { comic_slug, username } = params;
 
-    const comic_res = await fetch(`http://localhost:6060/api/v1/comics/by_slug/${comic_slug}`);
+    const comic_res = await fetch(`http://localhost:6060/api/v1/comics/by_slug/${comic_slug}/${username}`);
 
     if (comic_res.status != 200) {
         const errorMessage = await comic_res.json();

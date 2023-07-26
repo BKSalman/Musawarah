@@ -39,7 +39,7 @@ pub fn comics_router() -> Router<AppState> {
         .route("/:comic_id", put(update_comic))
         .route("/:comic_id", delete(delete_comic))
         .route("/:comic_id", get(get_comic))
-        .route("/by_slug/:slug", get(get_comic_by_slug))
+        .route("/by_slug/:slug/:username", get(get_comic_by_slug))
         .route("/:comic_id/rate", post(rate_comic))
         .nest("/", comic_genres_router())
         .nest("/", comic_comments_router())
@@ -227,10 +227,10 @@ pub async fn get_comic(
     Ok(Json(comic))
 }
 
-/// Get comic by slug
+/// Get comic by slug and username
 #[utoipa::path(
     get,
-    path = "/api/v1/comics/by_slug/:slug",
+    path = "/api/v1/comics/by_slug/:slug/:username",
     responses(
         (status = 200, description = "Caller authorized. returned requested comic", body = ComicResponse),
         (status = StatusCode::UNAUTHORIZED, description = "Caller unauthorized", body = ErrorResponse ),
@@ -245,13 +245,14 @@ pub async fn get_comic(
 pub async fn get_comic_by_slug(
     _auth: AuthExtractor<{ UserRole::User as u32 }>,
     State(state): State<Arc<InnerAppState>>,
-    Path(slug): Path<String>,
+    Path((slug, username)): Path<(String, String)>,
 ) -> Result<Json<ComicResponse>, ComicsError> {
     let mut db = state.pool.get().await?;
 
     let (comic, user) = comics::table
         .filter(comics::slug.eq(slug))
         .inner_join(users::table)
+        .filter(users::username.eq(username))
         .select((Comic::as_select(), User::as_select()))
         .first::<(Comic, User)>(&mut db)
         .await?;
