@@ -11,10 +11,35 @@
     flake-utils.lib.eachDefaultSystem (system: 
       let 
         pkgs = import nixpkgs { inherit system; overlays = [ rust-overlay.overlays.default ]; };
+
+        # super hacky way to use mold
+        bintools-wrapper = "${nixpkgs}/pkgs/build-support/bintools-wrapper";
+        mold' = pkgs.symlinkJoin {
+          name = "mold";
+          paths = [ pkgs.mold ];
+          nativeBuildInputs = [ pkgs.makeWrapper ];
+          suffixSalt = pkgs.lib.replaceStrings ["-" "."] ["_" "_"] pkgs.targetPlatform.config;
+          postBuild = ''
+            for bin in ${pkgs.mold}/bin/*; do
+              rm $out/bin/"$(basename "$bin")"
+
+              export prog="$bin"
+              substituteAll "${bintools-wrapper}/ld-wrapper.sh" $out/bin/"$(basename "$bin")"
+              chmod +x $out/bin/"$(basename "$bin")"
+
+              mkdir -p $out/nix-support
+              substituteAll "${bintools-wrapper}/add-flags.sh" $out/nix-support/add-flags.sh
+              substituteAll "${bintools-wrapper}/add-hardening.sh" $out/nix-support/add-hardening.sh
+              substituteAll "${bintools-wrapper}/../wrapper-common/utils.bash" $out/nix-support/utils.bash
+            done
+          '';
+        };
       in
     with pkgs; {
-      devShell = mkShell {
+      devShell = mkShell.override({ stdenv = gcc12Stdenv; }) {
+          NIX_CFLAGS_LINK = "-fuse-ld=mold";
           packages = [
+            mold'
             # general utilities
             exa
             fd
