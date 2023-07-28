@@ -9,7 +9,7 @@
     $: ({chapter, comic_id} = data);
 
     const acceptedFileTypes = ["image/png", "image/jpeg", "image/jpg"];
-    
+
     $: currentChapterNumber = chapter.number;
 
     let pages: any[] = [];

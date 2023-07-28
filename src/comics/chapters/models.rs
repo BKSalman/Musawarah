@@ -60,6 +60,7 @@ impl Chapter {
                 .collect(),
             rating: average_rating(chapter_ratings),
             author_id: self.user_id,
+            comic_id: self.comic_id,
         }
     }
 
@@ -153,6 +154,7 @@ pub struct UpdateChapterPage {
 pub struct ChapterResponse {
     pub id: Uuid,
     pub author_id: Uuid,
+    pub comic_id: Uuid,
     pub title: String,
     pub rating: f64,
     pub number: i32,

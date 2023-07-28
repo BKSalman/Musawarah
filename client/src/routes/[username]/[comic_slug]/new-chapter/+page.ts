@@ -3,9 +3,9 @@ import type { PageLoad } from "./$types";
 import type { ComicResponse } from "bindings/ComicResponse";
 
 export const load = (async ({ params }) => {
-    const { username, comic_id } = params;
+    const { username, comic_slug } = params;
 
-    const res = await fetch(`http://localhost:6060/api/v1/comics/${comic_id}`, {
+    const res = await fetch(`http://localhost:6060/api/v1/comics/by_slug/${comic_slug}/${username}`, {
         credentials: "include"
     });
 
@@ -14,6 +14,6 @@ export const load = (async ({ params }) => {
     }
 
     const comic: ComicResponse = await res.json();
-    
+
     return { username, comic };
 }) satisfies PageLoad;

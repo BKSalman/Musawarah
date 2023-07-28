@@ -8,6 +8,7 @@ use axum::{
 use chrono::Utc;
 use diesel::BelongingToDsl;
 use diesel::GroupedBy;
+use diesel::NullableExpressionMethods;
 use diesel::{ExpressionMethods, QueryDsl, SelectableHelper};
 use diesel_async::{scoped_futures::ScopedFutureExt, AsyncConnection, RunQueryDsl};
 use futures::TryStreamExt;
@@ -31,7 +32,7 @@ use crate::{
     },
     common::models::ImageResponse,
     s3::Upload,
-    schema::{chapter_pages, chapter_ratings, comic_chapters},
+    schema::{chapter_pages, chapter_ratings, comic_chapters, comics, users},
     users::models::UserRole,
     AppState, InnerAppState, SortingOrder,
 };
@@ -62,6 +63,10 @@ pub fn chapters_router() -> Router<AppState> {
         .route("/:comic_id/chapters", get(get_chapters))
         .route("/chapters/:chapter_id", delete(delete_chapter))
         .route("/chapters/:chapter_id", put(update_chapter))
+        .route(
+            "/chapters/by_slug/:username/:slug/:chapter_number/",
+            get(get_chapter_by_slug),
+        )
         .route("/chapters/:chapter_id/s", get(get_chapter))
         .route("/chapters/:chapter_id/rate", post(rate_chapter))
         .route(
@@ -361,6 +366,52 @@ pub async fn get_chapter(
 
     let chapter = comic_chapters::table
         .find(chapter_id)
+        .first::<Chapter>(&mut db)
+        .await?;
+
+    let chapter_pages = ChapterPage::belonging_to(&chapter)
+        .order(chapter_pages::number.asc())
+        .load::<ChapterPage>(&mut db)
+        .await?;
+
+    let chapter_ratings = ChapterRating::belonging_to(&chapter)
+        .load::<ChapterRating>(&mut db)
+        .await?;
+
+    let chapter = chapter.into_response(chapter_pages, chapter_ratings);
+
+    Ok(Json(chapter))
+}
+
+/// Get chapter of a comic by username, comic slug, and chapter number
+#[utoipa::path(
+    get,
+    path = "/api/v1/comics/chapters/by_slug/:username/:slug/:chapter_number/",
+    responses(
+        (status = 200, description = "Get chapter", body = ChapterResponse),
+        (status = StatusCode::NOT_FOUND, description = "Specified chapter not found", body = ErrorResponse),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorResponse),
+    ),
+    tag = "Chapters API"
+)]
+#[axum::debug_handler(state = AppState)]
+pub async fn get_chapter_by_slug(
+    _auth: AuthExtractor<{ UserRole::User as u32 }>,
+    State(state): State<Arc<InnerAppState>>,
+    Path((username, slug, chapter_number)): Path<(String, String, i32)>,
+) -> Result<Json<ChapterResponse>, ChaptersError> {
+    let mut db = state.pool.get().await?;
+
+    let comic_id = users::table
+        .filter(users::username.eq(username))
+        .inner_join(comics::table)
+        .filter(comics::slug.eq(slug))
+        .select(comics::id)
+        .single_value();
+
+    let chapter = comic_chapters::table
+        .filter(comic_chapters::comic_id.nullable().eq(comic_id))
+        .filter(comic_chapters::number.eq(chapter_number))
         .first::<Chapter>(&mut db)
         .await?;
 

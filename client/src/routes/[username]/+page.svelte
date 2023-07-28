@@ -23,7 +23,7 @@
     <div class="content">
         <h1>Comics</h1>
         {#each comics || [] as comic}
-            <a href={`/${user.username}/${comic.id}`}>
+            <a href={`/${user.username}/${comic.slug}`}>
                 <div class="comic">
                     <h2 class="comic-title">{comic.title}</h2>
                     <p>{comic.description ?? ""}</p>

@@ -57,7 +57,7 @@
 
             const response: ChapterResponseBrief = await res.json();
             // TODO: add user field to chapter response instead of using the slug
-            await goto(`/${username}/${comic.id}/${response.id}`);
+            await goto(`/${username}/${comic.slug}/${response.number}`);
           }
         },
         onError({ result, message }) {

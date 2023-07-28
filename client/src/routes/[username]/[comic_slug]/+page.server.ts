@@ -3,10 +3,10 @@ import type { PageServerLoad } from './$types';
 import type { ComicResponse } from 'bindings/ComicResponse';
 import type { ComicCommentResponse } from 'bindings/ComicCommentResponse';
 
-export const load = (async ({ fetch, params, cookies}) => {
-    const { comic_id, username } = params;
+export const load = (async ({ fetch, params }) => {
+    const { comic_slug, username } = params;
 
-    const comic_res = await fetch(`http://localhost:6060/api/v1/comics/${comic_id}`);
+    const comic_res = await fetch(`http://localhost:6060/api/v1/comics/by_slug/${comic_slug}/${username}`);
 
     if (comic_res.status != 200) {
         const errorMessage = await comic_res.json();
@@ -15,7 +15,7 @@ export const load = (async ({ fetch, params, cookies}) => {
 
     const comic: ComicResponse = await comic_res.json();
 
-    const comment_res = await fetch(`http://localhost:6060/api/v1/comics/${comic_id}/comments`);
+    const comment_res = await fetch(`http://localhost:6060/api/v1/comics/${comic.id}/comments`);
 
     if (comment_res.status != 200) {
         const errorMessage = await comment_res.json();
@@ -27,7 +27,7 @@ export const load = (async ({ fetch, params, cookies}) => {
     let top_level_comments: ComicCommentResponse[] = comments.filter((comment) => {
         return comment.parent_comment === null;
     });
-    
+
     for (const comment of top_level_comments) {
         fill_children(comment, comments, 3);
     }
@@ -42,7 +42,7 @@ export const load = (async ({ fetch, params, cookies}) => {
 const fill_children = (comment: ComicCommentResponse, comments: ComicCommentResponse[], limit: number) => {
     if (limit <= 0) {
         // limit is removed for now
-        
+
         // comment.child_comments = [];
         // return;
     }

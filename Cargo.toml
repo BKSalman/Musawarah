@@ -52,6 +52,7 @@ diesel-async = { version = "0.2.2", features = ["tokio-postgres", "deadpool"] }
 diesel_migrations_async = { git = "https://github.com/aumetra/diesel_migrations_async", features = ["postgres"] }
 toml = "0.7.4"
 lettre = { version = "0.10.4", default-features = false, features = ["tokio1", "tokio1-rustls-tls", "smtp-transport", "builder"] }
+regex = "1.9.1"
 
 [patch.crates-io]
 utoipa = { git = "https://github.com/juhaku/utoipa", rev = "b7020f44890e4472bc17c825f8db3455f30c27a4" }

@@ -95,6 +95,7 @@ diesel::table! {
     comics (id) {
         id -> Uuid,
         title -> Text,
+        slug -> Text,
         description -> Nullable<Text>,
         created_at -> Timestamptz,
         updated_at -> Nullable<Timestamptz>,

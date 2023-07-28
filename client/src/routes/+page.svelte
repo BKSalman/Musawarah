@@ -11,7 +11,7 @@
 <div class="main-container">
   <h1>Home page</h1>
   {#each comics || [] as comic}
-    <a href={`/${comic.author.username}/${comic.id}`}><div>{comic.title}</div></a>
+    <a href={`/${comic.author.username}/${comic.slug}`}><div>{comic.title}</div></a>
     <div>Genres:</div>
     {#each comic.genres as genre}
       <div>{genre.name}</div>

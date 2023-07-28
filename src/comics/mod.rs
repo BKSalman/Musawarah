@@ -14,6 +14,7 @@ pub mod comic_comments;
 pub mod comic_genres;
 pub mod models;
 pub mod routes;
+mod utils;
 
 #[derive(Debug, Deserialize, IntoParams)]
 pub struct ComicsParams {
@@ -66,7 +67,7 @@ impl IntoResponse for ComicsError {
                 if let DatabaseError(DatabaseErrorKind::UniqueViolation, message) = diesel_error {
                     let constraint_name = message.constraint_name().unwrap();
                     return match constraint_name {
-                        "comics_title_key" => (
+                        "comics_user_id_slug_key" => (
                             StatusCode::CONFLICT,
                             ErrorResponse {
                                 error: String::from("comic with the same title already exists"),

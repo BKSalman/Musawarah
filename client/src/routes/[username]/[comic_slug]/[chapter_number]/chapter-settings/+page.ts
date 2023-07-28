@@ -3,12 +3,13 @@ import type { PageLoad } from './$types';
 import type { ChapterResponse } from 'bindings/ChapterResponse';
 
 export const load = (async ({ fetch, params, depends }) => {
-    const { username, comic_id, chapter_id } = params;
-    
+    const { username, comic_slug, chapter_number } = params;
+
     depends("chapter-info");
-    const res = await fetch(`http://localhost:6060/api/v1/comics/chapters/${chapter_id}/s`, {
-        credentials: "include",
-    });
+    const res = await fetch(`http://localhost:6060/api/v1/comics/chapters/by_slug/${username}/${comic_slug}/${chapter_number}/`
+        , {
+            credentials: "include",
+        });
 
     if (res.status === 401) {
         throw redirect(307, "/");
@@ -20,7 +21,7 @@ export const load = (async ({ fetch, params, depends }) => {
     const chapter: ChapterResponse = await res.json();
 
     return {
-        comic_id,
+        comic_id: chapter.comic_id,
         username,
         chapter,
     }
