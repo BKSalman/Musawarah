@@ -7,23 +7,23 @@ export const load = (async ({ fetch, params }) => {
 
   const { username } = params;
 
-  const comicsRes = await fetch(`http://localhost:6060/api/v1/users/comics/${username}`, {
+  const comics_res = await fetch(`http://localhost:6060/api/v1/users/comics/${username}`, {
     credentials: "include",
   });
-  if (comicsRes.status != 200) {
-    const errorMessage = await comicsRes.json();
-    throw error(comicsRes.status, errorMessage.error);
+  if (comics_res.status != 200) {
+    const res_error = await comics_res.json().catch(() => ({ error: comics_res.statusText }));
+    throw error(comics_res.status, res_error);
   }
-  const comics: ComicResponse[] = await comicsRes.json();
+  const comics: ComicResponse[] = await comics_res.json();
 
-  const userRes = await fetch(`http://localhost:6060/api/v1/users/${username}`, {
+  const user_res = await fetch(`http://localhost:6060/api/v1/users/${username}`, {
     credentials: "include",
   });
-  if (userRes.status != 200) {
-    const errorMessage = await userRes.json();
-    throw error(userRes.status, errorMessage.error);
+  if (user_res.status != 200) {
+    const res_error = await user_res.json().catch(() => ({ error: user_res.statusText }));
+    throw error(user_res.status, res_error);
   }
-  const user: UserResponse = await userRes.json();
+  const user: UserResponse = await user_res.json();
 
   return {
     comics,

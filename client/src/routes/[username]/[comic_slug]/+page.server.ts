@@ -9,8 +9,8 @@ export const load = (async ({ fetch, params }) => {
     const comic_res = await fetch(`http://localhost:6060/api/v1/comics/by_slug/${comic_slug}/${username}`);
 
     if (comic_res.status != 200) {
-        const errorMessage = await comic_res.json();
-        throw error(comic_res.status, errorMessage);
+        const res_error = await comic_res.json().catch(() => ({ error: comic_res.statusText }));
+        throw error(comic_res.status, res_error);
     }
 
     const comic: ComicResponse = await comic_res.json();
@@ -18,8 +18,8 @@ export const load = (async ({ fetch, params }) => {
     const comment_res = await fetch(`http://localhost:6060/api/v1/comics/${comic.id}/comments`);
 
     if (comment_res.status != 200) {
-        const errorMessage = await comment_res.json();
-        throw error(comment_res.status, errorMessage);
+        const res_error = await comment_res.json().catch(() => ({ error: comment_res.statusText }));
+        throw error(comment_res.status, res_error);
     }
 
     let comments: ComicCommentResponse[] = await comment_res.json();
