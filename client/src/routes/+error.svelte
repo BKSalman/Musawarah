@@ -1,14 +1,16 @@
 <script lang="ts">
     import { page } from '$app/stores';
 
-    const errors = $page.error?.errors;
+    const message = $page.error?.error;
+    const details = $page.error?.details;
     const status = $page.status
 </script>
   
 <h1 class="container">
     <h1>{status}</h1>
-    {#each errors || [] as error}
-        <div>{error}</div>
+    <h5>{message}</h5>
+    {#each details || [] as detail}
+        <div>{detail}</div>
     {/each}
 </h1>
 
