@@ -14,8 +14,8 @@ export const load = (async ({ fetch, params, depends }) => {
     if (res.status === 401) {
         throw redirect(307, "/");
     } else if (res.status !== 200) {
-        const res_error = await res.json().catch(() => ({ error: res.statusText }));
-        throw error(res.status, res_error);
+        const resError = await res.json().catch(() => ({ error: res.statusText }));
+        throw error(res.status, resError);
     }
 
     const chapter: ChapterResponse = await res.json();
