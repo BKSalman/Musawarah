@@ -36,10 +36,9 @@
         };
       in
     with pkgs; {
-      devShell = mkShell.override({ stdenv = gcc12Stdenv; }) {
+      devShell = mkShell {
           NIX_CFLAGS_LINK = "-fuse-ld=mold";
           packages = [
-            mold'
             # general utilities
             exa
             fd
@@ -49,6 +48,11 @@
             # database
             postgresql
             docker
+          ];
+          
+          nativeBuildInputs = [
+            mold'
+            clang
           ];
           
           buildInputs = [

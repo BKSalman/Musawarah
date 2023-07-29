@@ -56,3 +56,6 @@ regex = "1.9.1"
 
 [patch.crates-io]
 utoipa = { git = "https://github.com/juhaku/utoipa", rev = "b7020f44890e4472bc17c825f8db3455f30c27a4" }
+
+[profile.dev]
+debug = 0
