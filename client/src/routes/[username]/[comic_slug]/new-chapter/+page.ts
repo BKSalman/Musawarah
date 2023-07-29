@@ -10,7 +10,8 @@ export const load = (async ({ params }) => {
     });
 
     if (res.status !== 200) {
-        throw error(res.status, await res.json());
+        const resError = await res.json().catch(() => ({ error: res.statusText }));
+        throw error(res.status, resError);
     }
 
     const comic: ComicResponse = await res.json();

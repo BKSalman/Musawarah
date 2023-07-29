@@ -6,23 +6,23 @@ import type { ComicCommentResponse } from 'bindings/ComicCommentResponse';
 export const load = (async ({ fetch, params }) => {
     const { comic_slug, username } = params;
 
-    const comic_res = await fetch(`http://localhost:6060/api/v1/comics/by_slug/${comic_slug}/${username}`);
+    const comicRes = await fetch(`http://localhost:6060/api/v1/comics/by_slug/${comic_slug}/${username}`);
 
-    if (comic_res.status != 200) {
-        const errorMessage = await comic_res.json();
-        throw error(comic_res.status, errorMessage);
+    if (comicRes.status != 200) {
+        const resError = await comicRes.json().catch(() => ({ error: comicRes.statusText }));
+        throw error(comicRes.status, resError);
     }
 
-    const comic: ComicResponse = await comic_res.json();
+    const comic: ComicResponse = await comicRes.json();
 
-    const comment_res = await fetch(`http://localhost:6060/api/v1/comics/${comic.id}/comments`);
+    const commentRes = await fetch(`http://localhost:6060/api/v1/comics/${comic.id}/comments`);
 
-    if (comment_res.status != 200) {
-        const errorMessage = await comment_res.json();
-        throw error(comment_res.status, errorMessage);
+    if (commentRes.status != 200) {
+        const resError = await commentRes.json().catch(() => ({ error: commentRes.statusText }));
+        throw error(commentRes.status, resError);
     }
 
-    let comments: ComicCommentResponse[] = await comment_res.json();
+    let comments: ComicCommentResponse[] = await commentRes.json();
 
     let top_level_comments: ComicCommentResponse[] = comments.filter((comment) => {
         return comment.parent_comment === null;

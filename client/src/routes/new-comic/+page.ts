@@ -6,8 +6,8 @@ export const load = (async ({ fetch }) => {
     const res = await fetch("http://localhost:6060/api/v1/comics/genres");
 
     if (res.status !== 200) {
-        const errorMessage = await res.json();
-        throw error(res.status, errorMessage.error);
+        const resError = await res.json().catch(() => ({ error: res.statusText }));
+        throw error(res.status, resError);
     }
 
     const genres: ComicGenre[] = await res.json();

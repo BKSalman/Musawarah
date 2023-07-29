@@ -11,8 +11,8 @@ export const load = (async ({ fetch, params }) => {
     credentials: "include",
   });
   if (comicsRes.status != 200) {
-    const errorMessage = await comicsRes.json();
-    throw error(comicsRes.status, errorMessage.error);
+    const resError = await comicsRes.json().catch(() => ({ error: comicsRes.statusText }));
+    throw error(comicsRes.status, resError);
   }
   const comics: ComicResponse[] = await comicsRes.json();
 
@@ -20,8 +20,8 @@ export const load = (async ({ fetch, params }) => {
     credentials: "include",
   });
   if (userRes.status != 200) {
-    const errorMessage = await userRes.json();
-    throw error(userRes.status, errorMessage.error);
+    const resError = await userRes.json().catch(() => ({ error: userRes.statusText }));
+    throw error(userRes.status, resError);
   }
   const user: UserResponse = await userRes.json();
 
