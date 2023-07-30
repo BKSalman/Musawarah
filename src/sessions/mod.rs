@@ -21,7 +21,7 @@ use crate::{schema::sessions, AppState, ErrorResponse, InnerAppState};
 pub const SESSION_COOKIE_NAME: &str = "session_id";
 
 pub struct UserSession {
-    session_id: Option<Uuid>,
+    pub session_id: Option<Uuid>,
 }
 
 #[derive(thiserror::Error, Debug)]
