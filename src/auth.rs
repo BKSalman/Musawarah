@@ -3,12 +3,11 @@ use axum::{extract::FromRequestParts, http::StatusCode, response::IntoResponse, 
 use chrono::Utc;
 use diesel::{BoolExpressionMethods, ExpressionMethods, QueryDsl, SelectableHelper};
 use diesel_async::RunQueryDsl;
-use tower_cookies::{Cookie, Cookies};
 use uuid::Uuid;
 
 use crate::{
     schema::{sessions, users},
-    sessions::{models::Session, SESSION_COOKIE_NAME},
+    sessions::{models::Session, UserSession},
     users::models::{User, UserResponseBrief, UserRole},
     AppState, ErrorResponse,
 };
@@ -33,6 +32,9 @@ pub enum AuthError {
 
     #[error("invalid session")]
     InvalidSession,
+
+    #[error("invalid session")]
+    SessionError(#[from] crate::sessions::SessionError),
 }
 
 impl IntoResponse for AuthError {
@@ -51,6 +53,7 @@ impl IntoResponse for AuthError {
                 .into_response(),
             AuthError::Diesel(_) => (StatusCode::INTERNAL_SERVER_ERROR).into_response(),
             AuthError::PoolError(_) => (StatusCode::INTERNAL_SERVER_ERROR).into_response(),
+            AuthError::SessionError(e) => e.into_response(),
         }
     }
 }
@@ -65,53 +68,14 @@ impl<const USER_ROLE: u32> FromRequestParts<AppState> for AuthExtractor<USER_ROL
     ) -> std::result::Result<Self, Self::Rejection> {
         let mut db = state.inner.pool.get().await?;
 
-        let cookies =
-            parts
-                .extract::<Cookies>()
-                .await
-                .map_err(|(_error_status, error_message)| {
-                    tracing::error!("auth-extractor: failed to get cookies: {error_message}");
-                    AuthError::InvalidSession
-                })?;
-
-        #[allow(unused_mut)]
-        let mut remove_cookie_on_fail = Cookie::build(SESSION_COOKIE_NAME, "")
-            .path("/")
-            .http_only(true);
-
-        #[cfg(not(debug_assertions))]
-        {
-            remove_cookie_on_fail = remove_cookie_on_fail
-                // TODO: use the actual musawarah domain
-                .domain("salmanforgot.com")
-                .secure(true);
-        }
-
-        #[cfg(debug_assertions)]
-        {
-            remove_cookie_on_fail = remove_cookie_on_fail.domain("localhost");
-        }
-
-        let session_id = match cookies
-            .private(&state.inner.cookies_secret)
-            .get(SESSION_COOKIE_NAME)
-        {
-            None => {
-                tracing::error!("auth-extractor: failed to get session_id cookie");
-                cookies.remove(remove_cookie_on_fail.finish());
-                return Err(AuthError::InvalidSession);
-            }
-            Some(id) => id,
-        };
-
-        let session_id = match Uuid::parse_str(session_id.value()) {
-            Err(e) => {
-                tracing::error!("auth-extractor: invalid session_id: {e}");
-                cookies.remove(remove_cookie_on_fail.finish());
-                return Err(AuthError::InvalidSession);
-            }
-            Ok(id) => id,
-        };
+        let session_id = parts
+            .extract_with_state::<UserSession, _>(state)
+            .await?
+            .session_id
+            .ok_or_else(|| {
+                tracing::error!("auth-extractor: missing session_id");
+                return AuthError::InvalidSession;
+            })?;
 
         let mut query = sessions::table
             .inner_join(users::table)
@@ -141,7 +105,6 @@ impl<const USER_ROLE: u32> FromRequestParts<AppState> for AuthExtractor<USER_ROL
             .select((User::as_select(), Session::as_select()))
             .get_result::<(User, Session)>(&mut db)
             .await else {
-            cookies.remove(remove_cookie_on_fail.finish());
             diesel::delete(sessions::table.filter(sessions::id.eq(session_id))).execute(&mut db).await?;
             return Err(AuthError::InvalidSession);
         };
