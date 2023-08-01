@@ -90,7 +90,9 @@ impl IntoResponse for UsersError {
                 .into_response(),
             UsersError::Diesel(diesel_error) => {
                 if let DatabaseError(DatabaseErrorKind::UniqueViolation, message) = &diesel_error {
-                    let constraint_name = message.constraint_name().unwrap();
+                    let constraint_name = message
+                        .constraint_name()
+                        .expect("postgresql always provides the constraint name");
                     return match constraint_name {
                         "users_email_key" => (
                             StatusCode::CONFLICT,
