@@ -74,7 +74,7 @@ impl<const USER_ROLE: u32> FromRequestParts<AppState> for AuthExtractor<USER_ROL
             .session_id
             .ok_or_else(|| {
                 tracing::error!("auth-extractor: missing session_id");
-                return AuthError::InvalidSession;
+                AuthError::InvalidSession
             })?;
 
         let mut query = sessions::table

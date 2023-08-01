@@ -68,9 +68,11 @@ async fn main() {
                     ..Default::default()
                 };
 
-                let config_str = toml::to_string(&config).unwrap();
+                let config_str =
+                    toml::to_string(&config).expect("Serialize config struct to toml string");
 
-                fs::write("config.toml", config_str).unwrap();
+                fs::write("config.toml", config_str)
+                    .expect("writing config toml string to config.toml");
 
                 config
             }
@@ -96,8 +98,12 @@ async fn main() {
         .allow_headers([AUTHORIZATION, CONTENT_TYPE])
         // FIXME: add proper allowed origins
         .allow_origin([
-            "http://locahost:6060".parse().unwrap(),
-            "http://localhost:5173".parse().unwrap(),
+            "http://locahost:6060"
+                .parse()
+                .expect("valid field for allow_origin header"),
+            "http://localhost:5173"
+                .parse()
+                .expect("valid field for allow_origin header"),
         ])
         .allow_credentials(true);
 

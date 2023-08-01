@@ -183,6 +183,16 @@ pub async fn create_comment(
                     .get_result::<ComicComment>(transaction)
                     .await?;
 
+                let commnet_response = ComicCommentResponse {
+                    id: comment.id,
+                    comic_id,
+                    content: comment.content,
+                    user: auth.current_user,
+                    parent_comment: payload.parent_comment_id,
+                    child_comments_ids: vec![],
+                    child_comments: vec![],
+                };
+
                 if let Some(parent_comment_id) = payload.parent_comment_id {
                     diesel::insert_into(comic_comments_mapping::table)
                         .values((
@@ -191,27 +201,9 @@ pub async fn create_comment(
                         ))
                         .execute(transaction)
                         .await?;
-
-                    Ok(ComicCommentResponse {
-                        id: comment.id,
-                        comic_id,
-                        content: comment.content,
-                        user: auth.current_user,
-                        parent_comment: Some(parent_comment_id),
-                        child_comments_ids: vec![],
-                        child_comments: vec![],
-                    })
-                } else {
-                    Ok(ComicCommentResponse {
-                        id: comment.id,
-                        comic_id,
-                        content: comment.content,
-                        user: auth.current_user,
-                        parent_comment: None,
-                        child_comments_ids: vec![],
-                        child_comments: vec![],
-                    })
                 }
+
+                Ok(commnet_response)
             }
             .scope_boxed()
         })

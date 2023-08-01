@@ -65,7 +65,9 @@ impl IntoResponse for ComicsError {
             ComicsError::ImageTooLarge => StatusCode::BAD_REQUEST.into_response(),
             ComicsError::Diesel(diesel_error) => {
                 if let DatabaseError(DatabaseErrorKind::UniqueViolation, message) = diesel_error {
-                    let constraint_name = message.constraint_name().unwrap();
+                    let constraint_name = message
+                        .constraint_name()
+                        .expect("postgresql always provides the constraint name");
                     return match constraint_name {
                         "comics_user_id_slug_key" => (
                             StatusCode::CONFLICT,
@@ -96,16 +98,34 @@ impl IntoResponse for ComicsError {
                 } else if let DatabaseError(DatabaseErrorKind::ForeignKeyViolation, message) =
                     diesel_error
                 {
-                    let constraint_name = message.constraint_name().unwrap();
-                    if constraint_name == "comic_ratings_comic_id_fkey" {
-                        return (
-                            StatusCode::NOT_FOUND,
-                            ErrorResponse {
-                                error: String::from("comic not found"),
-                                ..Default::default()
-                            },
-                        )
-                            .into_response();
+                    let constraint_name = message
+                        .constraint_name()
+                        .expect("postgresql always provides the constraint name");
+                    return match constraint_name {
+                        "comic_ratings_comic_id_fkey" => {
+                            return (
+                                StatusCode::NOT_FOUND,
+                                ErrorResponse {
+                                    error: String::from("comic not found"),
+                                    ..Default::default()
+                                },
+                            )
+                                .into_response();
+                        }
+                        "comic_genres_mapping_genre_id_fkey" => {
+                            return (
+                                StatusCode::BAD_REQUEST,
+                                ErrorResponse {
+                                    error: String::from(
+                                        "no genre is associated with the provided id",
+                                    ),
+                                    ..Default::default()
+                                },
+                            )
+                                .into_response();
+                        }
+
+                        _ => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
                     };
                 }
                 StatusCode::INTERNAL_SERVER_ERROR.into_response()
