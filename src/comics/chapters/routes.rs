@@ -193,7 +193,7 @@ pub async fn create_chapter_page(
                         .file_name()
                         .ok_or_else(|| {
                             tracing::error!("no file name");
-                            return ChaptersError::BadRequest;
+                            ChaptersError::BadRequest
                         })?
                         .to_string();
 
