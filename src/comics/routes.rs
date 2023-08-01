@@ -92,19 +92,7 @@ pub async fn create_comic(
                     .get_result(transaction)
                     .await?;
 
-                let mut comic_response = ComicResponse {
-                    id: comic.id,
-                    author: auth.current_user,
-                    title: comic.title.to_string(),
-                    slug: comic.slug.to_string(),
-                    description: comic.description.clone(),
-                    rating: 0.0,
-                    created_at: comic.created_at.to_string(),
-                    chapters: vec![],
-                    genres: vec![],
-                };
-
-                if let Some(genres) = payload.genres {
+                let genres: Vec<ComicGenre> = if let Some(genres) = payload.genres {
                     let db_genre_mappings: Vec<GenreMapping> = genres
                         .iter()
                         .map(|genre| GenreMapping {
@@ -124,15 +112,28 @@ pub async fn create_comic(
                         .load::<Genre>(transaction)
                         .await?;
 
-                    comic_response.genres = genres
+                    genres
                         .into_iter()
                         .map(|genre| ComicGenre {
                             id: genre.id,
                             name: genre.name,
                         })
-                        .collect();
-                }
-                Ok(comic_response)
+                        .collect()
+                } else {
+                    vec![]
+                };
+
+                Ok(ComicResponse {
+                    id: comic.id,
+                    author: auth.current_user,
+                    title: comic.title,
+                    slug: comic.slug,
+                    description: comic.description,
+                    rating: 0.0,
+                    created_at: comic.created_at.to_string(),
+                    chapters: vec![],
+                    genres,
+                })
             }
             .scope_boxed()
         })
