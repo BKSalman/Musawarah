@@ -27,7 +27,7 @@ use tracing::Level;
 use tracing_appender::rolling;
 use tracing_subscriber::{
     fmt::writer::MakeWriterExt, prelude::__tracing_subscriber_SubscriberExt,
-    util::SubscriberInitExt,
+    util::SubscriberInitExt, EnvFilter,
 };
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
@@ -143,6 +143,7 @@ fn logging() {
     let warn_file = rolling::daily("./logs", "warnings");
 
     tracing_subscriber::registry()
+        .with(EnvFilter::from_default_env())
         .with(
             tracing_subscriber::fmt::Layer::default()
                 .with_writer(debug_file.with_max_level(Level::DEBUG))
