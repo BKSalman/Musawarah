@@ -50,6 +50,7 @@
             }
             // force it to refresh
             comment = comment;
+            openChildren = true;
         }
     }
 </script>
