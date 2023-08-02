@@ -84,6 +84,9 @@ pub struct AppState {
         comics::chapters::routes::create_chapter_page,
         comics::chapters::routes::update_chapter_page,
         comics::chapters::routes::delete_chapter_page,
+        comics::chapters::chapter_comments::routes::get_comments,
+        comics::chapters::chapter_comments::routes::create_comment,
+        comics::chapters::chapter_comments::routes::delete_comment,
         comics::comic_genres::routes::get_genres,
         comics::comic_genres::routes::create_genre,
         comics::comic_genres::routes::update_genre,
@@ -120,9 +123,11 @@ pub struct AppState {
     modifiers(&SecurityAddon),
     tags(
         (name = "Users API"),
-        (name = "Comics API"),
         (name = "Chapters API"),
+        (name = "Chapter Comments API"),
+        (name = "Comics API"),
         (name = "Comic Genres API"),
+        (name = "Comic Comments API"),
     )
 )]
 pub struct ApiDoc;

@@ -84,8 +84,8 @@
             alias cat=bat
 
             # run dev servers
-            alias lcr='RUST_LOG=debug cargo run'
-            alias lcw='RUST_LOG=debug cargo watch -x run'
+            alias lcr='RUST_LOG=musawarah=debug,tower=debug cargo run'
+            alias lcw='RUST_LOG=musawarah=debug,tower=debug cargo watch -x run'
             alias npmd='pnpm run dev'
 
             # start dev database if available, if not create, and run it on port 5445

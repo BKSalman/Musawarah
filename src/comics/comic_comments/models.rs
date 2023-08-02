@@ -33,6 +33,7 @@ pub struct ComicCommentMapping {
 }
 
 #[derive(Deserialize, Serialize, Debug, ToSchema, TS)]
+#[ts(export)]
 pub struct CreateComicComment {
     pub content: String,
     pub parent_comment_id: Option<Uuid>,

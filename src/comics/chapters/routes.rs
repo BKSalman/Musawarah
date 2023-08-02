@@ -38,6 +38,7 @@ use crate::{
 };
 
 use super::{
+    chapter_comments::routes::chapter_comments_router,
     models::{
         Chapter, ChapterPageData, ChapterPageResponse, ChapterResponse, ChapterResponseBrief,
         CreateChapter, UpdateChapter,
@@ -78,6 +79,7 @@ pub fn chapters_router() -> Router<AppState> {
             "/chapters/pages/:chapter_page_id",
             delete(delete_chapter_page),
         )
+        .nest("/chapters/:chapter_id/comments", chapter_comments_router())
 }
 
 /// Create a chapter
