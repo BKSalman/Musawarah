@@ -7,6 +7,24 @@ pub mod sql_types {
 }
 
 diesel::table! {
+    chapter_comments (id) {
+        id -> Uuid,
+        content -> Text,
+        created_at -> Timestamptz,
+        updated_at -> Nullable<Timestamptz>,
+        chapter_id -> Uuid,
+        user_id -> Uuid,
+    }
+}
+
+diesel::table! {
+    chapter_comments_mapping (parent_comment_id, child_comment_id) {
+        parent_comment_id -> Uuid,
+        child_comment_id -> Uuid,
+    }
+}
+
+diesel::table! {
     chapter_pages (id) {
         id -> Uuid,
         number -> Int4,
@@ -166,6 +184,8 @@ diesel::table! {
     }
 }
 
+diesel::joinable!(chapter_comments -> comic_chapters (chapter_id));
+diesel::joinable!(chapter_comments -> users (user_id));
 diesel::joinable!(chapter_pages -> comic_chapters (chapter_id));
 diesel::joinable!(chapter_pages -> comics (comic_id));
 diesel::joinable!(chapter_pages -> users (user_id));
@@ -185,6 +205,8 @@ diesel::joinable!(profile_images -> users (user_id));
 diesel::joinable!(sessions -> users (user_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
+    chapter_comments,
+    chapter_comments_mapping,
     chapter_pages,
     chapter_ratings,
     comic_chapters,
