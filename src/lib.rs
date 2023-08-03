@@ -2,6 +2,7 @@ use std::{fmt::Display, fs, sync::Arc};
 
 use axum::{extract::FromRef, response::IntoResponse};
 use diesel::{
+    allow_columns_to_appear_in_same_group_by_clause, sql_function,
     sql_types::{Nullable, SingleValue},
 };
 use diesel_async::{pooled_connection::deadpool::Pool, AsyncPgConnection};
@@ -25,6 +26,33 @@ pub mod users;
 pub mod utils;
 
 sql_function! { fn coalesce<T: SingleValue>(x: Nullable<T>, y: T) -> T; }
+
+allow_columns_to_appear_in_same_group_by_clause!(
+    crate::schema::comics::id,
+    crate::schema::comics::title,
+    crate::schema::comics::slug,
+    crate::schema::comics::description,
+    crate::schema::comics::created_at,
+    crate::schema::comics::updated_at,
+    crate::schema::comics::is_visible,
+    crate::schema::comics::published_at,
+    crate::schema::comics::poster_path,
+    crate::schema::comics::poster_content_type,
+    crate::schema::comics::user_id,
+    crate::schema::users::id,
+    crate::schema::users::first_name,
+    crate::schema::users::last_name,
+    crate::schema::users::username,
+    crate::schema::users::displayname,
+    crate::schema::users::email,
+    crate::schema::users::phone_number,
+    crate::schema::users::bio,
+    crate::schema::users::password,
+    crate::schema::users::role,
+    crate::schema::users::created_at,
+    crate::schema::users::updated_at,
+    crate::schema::users::last_login,
+);
 
 #[derive(thiserror::Error, Debug)]
 pub enum ConfigError {
@@ -102,6 +130,7 @@ pub struct AppState {
         schemas(comics::models::CreateComic),
         schemas(comics::models::UpdateComic),
         schemas(comics::models::ComicResponse),
+        schemas(comics::models::ComicResponseBrief),
         schemas(comics::models::NewComicRating),
         schemas(comics::comic_genres::models::ComicGenre),
         schemas(comics::chapters::models::CreateChapter),
