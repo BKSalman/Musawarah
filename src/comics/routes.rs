@@ -1,24 +1,29 @@
 use std::sync::Arc;
 
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Path, State},
     routing::{delete, get, post, put},
     Json, Router,
 };
 use chrono::Utc;
-use diesel::prelude::*;
+use diesel::{dsl::avg, prelude::*};
 use diesel_async::{scoped_futures::ScopedFutureExt, AsyncConnection, RunQueryDsl};
 use garde::Validate;
 use itertools::multizip;
+use itertools::Itertools;
 use uuid::Uuid;
 
 use crate::{
     auth::AuthExtractor,
+    coalesce,
     comics::chapters::models::Chapter,
-    comics::comic_genres::models::{ComicGenre, Genre, GenreMapping},
-    comics::{models::NewComicRating, SortingOrder},
+    comics::models::NewComicRating,
+    comics::{
+        comic_genres::models::{Genre, GenreMapping},
+        Order,
+    },
     schema::{comic_genres, comic_genres_mapping, comic_ratings, comics, users},
-    users::models::{User, UserResponseBrief, UserRole},
+    users::models::{User, UserRole},
     utils::average_rating,
     AppState, InnerAppState,
 };
@@ -92,7 +97,7 @@ pub async fn create_comic(
                     .get_result(transaction)
                     .await?;
 
-                let genres: Vec<ComicGenre> = if let Some(genres) = payload.genres {
+                let genres: Vec<Genre> = if let Some(genres) = payload.genres {
                     let db_genre_mappings: Vec<GenreMapping> = genres
                         .iter()
                         .map(|genre| GenreMapping {
@@ -106,34 +111,16 @@ pub async fn create_comic(
                         .execute(transaction)
                         .await?;
 
-                    let genres = GenreMapping::belonging_to(&comic)
+                    GenreMapping::belonging_to(&comic)
                         .inner_join(comic_genres::table)
                         .select(Genre::as_select())
                         .load::<Genre>(transaction)
-                        .await?;
-
-                    genres
-                        .into_iter()
-                        .map(|genre| ComicGenre {
-                            id: genre.id,
-                            name: genre.name,
-                        })
-                        .collect()
+                        .await?
                 } else {
                     vec![]
                 };
 
-                Ok(ComicResponse {
-                    id: comic.id,
-                    author: auth.current_user,
-                    title: comic.title,
-                    slug: comic.slug,
-                    description: comic.description,
-                    rating: 0.0,
-                    created_at: comic.created_at.to_string(),
-                    chapters: vec![],
-                    genres,
-                })
+                Ok(comic.into_resonse(auth.current_user, genres, vec![], 0.0))
             }
             .scope_boxed()
         })
@@ -198,34 +185,12 @@ pub async fn get_comic(
         .load(&mut db)
         .await?;
 
-    let comic = ComicResponse {
-        id: comic.id,
-        author: UserResponseBrief {
-            id: user.id,
-            displayname: user.displayname,
-            username: user.username,
-            email: user.email,
-            role: user.role,
-        },
-        title: comic.title,
-        slug: comic.slug,
-        description: comic.description,
-        rating: average_rating(comic_ratings),
-        created_at: comic.created_at.to_string(),
-        chapters: chapters_and_pages
-            .into_iter()
-            .map(|(chapter, pages)| chapter.into_response_brief(pages))
-            .collect(),
-        genres: genres
-            .into_iter()
-            .map(|genre| ComicGenre {
-                id: genre.id,
-                name: genre.name,
-            })
-            .collect(),
-    };
-
-    Ok(Json(comic))
+    Ok(Json(comic.into_resonse(
+        user.into_response_brief(),
+        genres,
+        chapters_and_pages,
+        average_rating(comic_ratings),
+    )))
 }
 
 /// Get comic by slug and username
@@ -285,34 +250,12 @@ pub async fn get_comic_by_slug(
         .load(&mut db)
         .await?;
 
-    let comic = ComicResponse {
-        id: comic.id,
-        author: UserResponseBrief {
-            id: user.id,
-            displayname: user.displayname,
-            username: user.username,
-            email: user.email,
-            role: user.role,
-        },
-        title: comic.title,
-        slug: comic.slug,
-        description: comic.description,
-        rating: average_rating(comic_ratings),
-        created_at: comic.created_at.to_string(),
-        chapters: chapters_and_pages
-            .into_iter()
-            .map(|(chapter, pages)| chapter.into_response_brief(pages))
-            .collect(),
-        genres: genres
-            .into_iter()
-            .map(|genre| ComicGenre {
-                id: genre.id,
-                name: genre.name,
-            })
-            .collect(),
-    };
-
-    Ok(Json(comic))
+    Ok(Json(comic.into_resonse(
+        user.into_response_brief(),
+        genres,
+        chapters_and_pages,
+        average_rating(comic_ratings),
+    )))
 }
 
 /// Get comics with pagination and genre filtering

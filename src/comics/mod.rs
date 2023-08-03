@@ -1,7 +1,9 @@
 use axum::{http::StatusCode, response::IntoResponse};
+use chrono::{DateTime, Utc};
 use diesel::result::{DatabaseErrorKind, Error::DatabaseError};
 use diesel_async::pooled_connection::deadpool::PoolError;
 use serde::Deserialize;
+use serde::Serialize;
 use utoipa::IntoParams;
 use uuid::Uuid;
 
@@ -18,14 +20,37 @@ mod utils;
 
 #[derive(Debug, Deserialize, IntoParams)]
 pub struct ComicsParams {
-    #[serde(default = "Uuid::nil")]
-    pub min_id: Uuid,
     #[serde(default = "Uuid::max")]
     pub max_id: Uuid,
     #[serde(default)]
     pub genre: Option<i32>,
     #[serde(default)]
     pub sorting: Option<SortingOrder>,
+    #[serde(default)]
+    pub order: Order,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub enum Order {
+    Latest(DateTime<chrono::Utc>),
+    Best(f64),
+}
+
+impl Default for Order {
+    fn default() -> Self {
+        Self::Latest(Utc::now())
+    }
+}
+
+impl Default for ComicsParams {
+    fn default() -> Self {
+        ComicsParams {
+            max_id: Uuid::max(),
+            genre: Option::default(),
+            order: Order::default(),
+            sorting: Option::default(),
+        }
+    }
 }
 
 #[derive(thiserror::Error, Debug)]
