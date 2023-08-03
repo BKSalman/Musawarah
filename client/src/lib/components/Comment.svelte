@@ -5,29 +5,33 @@
     import Fa from "svelte-fa";
     import { currentUser } from "../../routes/stores";
     import { fly } from "svelte/transition";
+    import type { ChapterCommentResponse } from "bindings/ChapterCommentResponse";
 
-    export let comment: ComicCommentResponse;
+    export let comment: ComicCommentResponse | ChapterCommentResponse;
     export let indent = 0;
-    let openChildren = false;
+    let openChildren = comment.parent_comment == null;
     let openReplyBox = false;
+    let inputComment = "";
 
-    async function sendComment(e: SubmitEvent, parent_comment_id: string | null) {
-        const form = new FormData(e.target as HTMLFormElement);
+    function isComicComment(object: any): object is ComicCommentResponse {
+        return 'comic_id' in object;
+    }
 
-        const formComment = form.get("comment");
-
-        if (formComment?.toString() == null || formComment?.toString().length < 1) {
+    async function sendComment(parent_comment_id: string) {
+        if (inputComment.length < 1) {
             return;
         }
 
-        const res = await fetch(`http://localhost:6060/api/v1/comics/${comment.comic_id}/comments`, {
+        const route = isComicComment(comment) ? `http://localhost:6060/api/v1/comics/${comment.comic_id}/comments` : `http://localhost:6060/api/v1/comics/chapters/${comment.chapter_id}/comments`;
+
+        const res = await fetch(route, {
             credentials: "include",
             method: "POST",
             headers: {
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-                content: formComment,
+                content: inputComment,
                 parent_comment_id: parent_comment_id
             }),
         });
@@ -36,11 +40,23 @@
             // TODO: add message to the user that they need to log in
             await goto("/login");
         } else {
-            comment.child_comments.push(await res.json() as ComicCommentResponse);
+            if (isComicComment(comment)) {
+                comment.child_comments.push(await res.json() as ComicCommentResponse);
+            } else {
+                comment.child_comments.push(await res.json() as ChapterCommentResponse);
+            }
             // force it to refresh
             comment = comment;
+            openChildren = true;
+            openReplyBox = false;
+            inputComment = "";
         }
     }
+
+    function focus(el: HTMLElement) {
+        el.focus()
+    }
+
 </script>
 
 <div transition:fly|global={{ y: -10, duration: 100 }} class="comment" style="padding-left: {indent}rem">
@@ -51,12 +67,14 @@
     </button>
     {#if openReplyBox}
         {#if $currentUser}
-            <form transition:fly|global={{ y: -10, duration: 100 }} class="new-reply"
-                on:submit|preventDefault={(e) => sendComment(e, comment.id)}>
+            <div transition:fly|global={{ y: -10, duration: 100 }} class="new-reply">
+                <input type="text" name="comment" placeholder="Add a reply"
+                    bind:value={inputComment}
+                    use:focus
+                    on:keypress={(e) => { if (e.key === "Enter") sendComment(comment.id) }}>
 
-                <input type="text" name="comment" placeholder="Add a reply">
-                <button type="submit">send</button>
-            </form>
+                <button on:click={() => sendComment(comment.id)}>send</button>
+            </div>
         {:else}
             <h3 transition:fly|global={{ y: 10, duration: 200 }}><a href="/login">need to be logged in</a></h3>
         {/if}

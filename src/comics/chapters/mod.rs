@@ -1,3 +1,4 @@
+pub mod chapter_comments;
 pub mod models;
 pub mod routes;
 mod utils;
