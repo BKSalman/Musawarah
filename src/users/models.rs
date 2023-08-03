@@ -85,6 +85,18 @@ pub struct User {
     pub last_login: Option<NaiveDateTime>,
 }
 
+impl User {
+    pub fn into_response_brief(self) -> UserResponseBrief {
+        UserResponseBrief {
+            id: self.id,
+            displayname: self.displayname,
+            username: self.username,
+            email: self.email,
+            role: self.role,
+        }
+    }
+}
+
 #[derive(Insertable, Queryable, Identifiable, Associations, Selectable, Debug)]
 #[diesel(belongs_to(User))]
 #[diesel(table_name = profile_images)]

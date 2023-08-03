@@ -13,6 +13,11 @@ use crate::{
     Rating,
 };
 
+use super::{
+    chapters::models::{Chapter, ChapterPage},
+    comic_genres::models::Genre,
+};
+
 #[derive(Insertable, Queryable, Selectable, Associations, Identifiable, Debug, Clone)]
 #[diesel(belongs_to(User))]
 #[diesel(table_name = comics)]
@@ -56,6 +61,61 @@ pub struct ComicResponseBrief {
     pub chapters_count: i64,
     pub created_at: String,
     pub genres: Vec<ComicGenre>,
+}
+
+impl Comic {
+    pub fn into_resonse(
+        self,
+        user: UserResponseBrief,
+        genres: Vec<Genre>,
+        chapter_and_pages: Vec<(Chapter, Vec<ChapterPage>)>,
+        rating: f64,
+    ) -> ComicResponse {
+        ComicResponse {
+            id: self.id,
+            title: self.title,
+            slug: self.slug,
+            description: self.description,
+            created_at: self.created_at.to_string(),
+            rating,
+            author: user,
+            chapters: chapter_and_pages
+                .into_iter()
+                .map(|(chapter, pages)| chapter.into_response_brief(pages))
+                .collect(),
+            genres: genres
+                .into_iter()
+                .map(|genre| ComicGenre {
+                    id: genre.id,
+                    name: genre.name,
+                })
+                .collect(),
+        }
+    }
+
+    pub fn into_response_brief(
+        self,
+        genres: Vec<Genre>,
+        chapters_count: i64,
+        rating: f64,
+    ) -> ComicResponseBrief {
+        ComicResponseBrief {
+            id: self.id,
+            title: self.title,
+            slug: self.slug,
+            description: self.description,
+            rating,
+            chapters_count,
+            created_at: self.created_at.to_string(),
+            genres: genres
+                .into_iter()
+                .map(|genre| ComicGenre {
+                    id: genre.id,
+                    name: genre.name,
+                })
+                .collect(),
+        }
+    }
 }
 
 #[derive(Insertable, Queryable, Selectable, Identifiable, Associations, Debug, PartialEq)]
