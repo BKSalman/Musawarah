@@ -1,6 +1,9 @@
 use std::{fmt::Display, fs, sync::Arc};
 
 use axum::{extract::FromRef, response::IntoResponse};
+use diesel::{
+    sql_types::{Nullable, SingleValue},
+};
 use diesel_async::{pooled_connection::deadpool::Pool, AsyncPgConnection};
 use s3::interface::Storage;
 use serde::{Deserialize, Serialize};
@@ -20,6 +23,8 @@ pub mod schema;
 pub mod sessions;
 pub mod users;
 pub mod utils;
+
+sql_function! { fn coalesce<T: SingleValue>(x: Nullable<T>, y: T) -> T; }
 
 #[derive(thiserror::Error, Debug)]
 pub enum ConfigError {
