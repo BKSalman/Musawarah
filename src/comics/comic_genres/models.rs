@@ -12,6 +12,7 @@ use crate::{
 
 #[derive(Queryable, Selectable, Identifiable, Debug, ToSchema, PartialEq)]
 #[diesel(table_name = comic_genres)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Genre {
     pub id: i32,
     pub name: String,
@@ -23,6 +24,7 @@ pub struct Genre {
 #[diesel(belongs_to(Genre))]
 #[diesel(table_name = comic_genres_mapping)]
 #[diesel(primary_key(comic_id, genre_id))]
+#[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct GenreMapping {
     pub comic_id: Uuid,
     pub genre_id: i32,
@@ -42,6 +44,7 @@ pub struct CreateComicGenre {
 
 #[derive(AsChangeset, Debug, Serialize, Deserialize, ToSchema, TS, PartialEq)]
 #[diesel(table_name = comic_genres)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct UpdateComicGenre {
     pub name: Option<String>,
     pub created_at: Option<DateTime<chrono::Utc>>,
@@ -49,6 +52,7 @@ pub struct UpdateComicGenre {
 
 #[derive(Insertable, Debug, PartialEq)]
 #[diesel(table_name = comic_genres)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct ComicGenreInsert {
     pub name: String,
     pub created_at: DateTime<chrono::Utc>,

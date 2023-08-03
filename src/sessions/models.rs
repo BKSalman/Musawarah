@@ -7,6 +7,7 @@ use crate::schema::sessions;
 #[derive(Queryable, Selectable)]
 #[diesel(belongs_to(User))]
 #[diesel(table_name = sessions)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Session {
     pub id: Uuid,
     pub created_at: DateTime<chrono::Utc>,
@@ -16,6 +17,7 @@ pub struct Session {
 
 #[derive(Insertable)]
 #[diesel(table_name = sessions)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct CreateSession {
     pub id: Uuid,
     pub user_id: Uuid,

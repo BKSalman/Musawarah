@@ -16,6 +16,7 @@ use crate::{
 #[derive(Insertable, Queryable, Selectable, Associations, Identifiable, Debug, Clone)]
 #[diesel(belongs_to(User))]
 #[diesel(table_name = comics)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Comic {
     pub id: Uuid,
     pub title: String,
@@ -48,6 +49,7 @@ pub struct ComicResponse {
 #[diesel(belongs_to(User))]
 #[diesel(belongs_to(Comic))]
 #[diesel(table_name = comic_ratings)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct ComicRating {
     pub id: Uuid,
     pub rating: f64,
@@ -74,6 +76,7 @@ pub struct CreateComic {
 
 #[derive(AsChangeset, Deserialize, ToSchema)]
 #[diesel(table_name = comics)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct UpdateComic {
     pub title: Option<String>,
     pub description: Option<String>,

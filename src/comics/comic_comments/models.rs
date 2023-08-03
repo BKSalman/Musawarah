@@ -14,6 +14,7 @@ use uuid::Uuid;
 #[diesel(belongs_to(User))]
 #[diesel(belongs_to(Comic))]
 #[diesel(table_name = comic_comments)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct ComicComment {
     pub id: Uuid,
     pub content: String,
@@ -27,6 +28,7 @@ pub struct ComicComment {
 #[diesel(belongs_to(ComicComment, foreign_key = parent_comment_id))]
 #[diesel(table_name = comic_comments_mapping)]
 #[diesel(primary_key(parent_comment_id, child_comment_id))]
+#[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct ComicCommentMapping {
     pub parent_comment_id: Uuid,
     pub child_comment_id: Uuid,
