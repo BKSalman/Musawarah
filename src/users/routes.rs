@@ -5,31 +5,29 @@ use argon2::{
     Argon2, PasswordHash,
 };
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Path, State},
     routing::{get, post},
     Json, Router,
 };
 use chrono::{Duration, Utc};
-use diesel::prelude::*;
 use diesel::GroupedBy;
+use diesel::{dsl::count, prelude::*};
 use diesel_async::{scoped_futures::ScopedFutureExt, AsyncConnection, RunQueryDsl};
 use garde::Validate;
 use itertools::multizip;
+use itertools::Itertools;
 use time::OffsetDateTime;
 use tower_cookies::{cookie::Cookie, Cookies};
 use uuid::Uuid;
 
 use crate::{
     auth::AuthExtractor,
-    comics::chapters::models::{Chapter, ChapterPage},
-    comics::comic_genres::models::{ComicGenre, Genre, GenreMapping},
-    comics::{
-        models::{Comic, ComicRating, ComicResponse},
-        ComicsParams,
-    },
+    coalesce,
+    comics::comic_genres::models::{Genre, GenreMapping},
+    comics::models::{Comic, ComicRating, ComicResponseBrief},
     common::models::ImageResponse,
     schema::comics,
-    schema::{comic_genres, profile_images, sessions, users},
+    schema::{comic_chapters, comic_genres, profile_images, sessions, users},
     sessions::{
         models::{CreateSession, Session},
         SESSION_COOKIE_NAME,
@@ -47,7 +45,7 @@ use super::{
 
 pub fn users_router() -> Router<AppState> {
     Router::new()
-        .route("/comics/:username", get(get_user_comics))
+        .route("/comics/:user_id", get(get_user_comics))
         .route("/logout", get(logout))
         .route("/:username", get(get_user))
         .route("/", post(create_user))
@@ -315,15 +313,12 @@ pub async fn logout(
     Ok(())
 }
 
-/// Get user comics by username
+/// Get user comics by user id
 #[utoipa::path(
     get,
-    path = "/api/v1/users/comics/:username",
-    params(
-        ComicsParams
-    ),
+    path = "/api/v1/users/comics/:user_id",
     responses(
-        (status = 200, description = "Caller authorized. returned requested user's comics", body = [ComicResponse]),
+        (status = 200, description = "Caller authorized. returned requested user's comics", body = [ComicResponseBrief]),
         (status = StatusCode::UNAUTHORIZED, description = "Caller unauthorized", body = ErrorResponse),
         (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Something went wrong", body = ErrorResponse),
     ),
@@ -335,95 +330,47 @@ pub async fn logout(
 #[axum::debug_handler(state = AppState)]
 pub async fn get_user_comics(
     State(state): State<Arc<InnerAppState>>,
-    Path(username): Path<String>,
-    Query(params): Query<ComicsParams>,
+    Path(user_id): Path<Uuid>,
     _auth: AuthExtractor<{ UserRole::User as u32 }>,
-) -> Result<Json<Vec<ComicResponse>>, UsersError> {
-    tracing::debug!("get {}'s comics", username);
+) -> Result<Json<Vec<ComicResponseBrief>>, UsersError> {
+    tracing::debug!("get {}'s comics", user_id);
 
     let mut db = state.pool.get().await?;
 
-    let user = users::table
-        .filter(users::username.eq(username))
-        .select(User::as_select())
-        .first(&mut db)
-        .await
-        .map_err(|e| {
-            if let diesel::result::Error::NotFound = e {
-                return UsersError::UserNotFound;
-            }
-            e.into()
-        })?;
-
-    let comics: Vec<Comic> = Comic::belonging_to(&user)
-        .filter(comics::id.gt(params.min_id))
-        .filter(comics::id.lt(params.max_id))
-        .limit(10)
-        .select(Comic::as_select())
-        .load::<Comic>(&mut db)
-        .await?;
-
-    let chapters = Chapter::belonging_to(&comics)
-        .load::<Chapter>(&mut db)
-        .await?;
-
-    let chapter_pages = ChapterPage::belonging_to(&chapters)
-        .select(ChapterPage::as_select())
-        .load::<ChapterPage>(&mut db)
-        .await?;
-
-    let chapters_and_pages = chapter_pages
-        .grouped_by(&chapters)
+    let (comics, chapters_counts): (Vec<Comic>, Vec<i64>) = comics::table
+        .filter(comics::user_id.eq(user_id))
+        .left_join(comic_chapters::table)
+        .group_by(comics::id)
+        .select((
+            Comic::as_select(),
+            coalesce(count(comic_chapters::id).nullable(), 0),
+        ))
+        .load::<(Comic, i64)>(&mut db)
+        .await?
         .into_iter()
-        .zip(chapters)
-        .map(|(p, c)| (c, p))
-        .collect::<Vec<(Chapter, Vec<ChapterPage>)>>()
-        .grouped_by(&comics);
+        .multiunzip();
 
-    let genres: Vec<(GenreMapping, Genre)> = GenreMapping::belonging_to(&comics)
+    let genres = GenreMapping::belonging_to(&comics)
         .inner_join(comic_genres::table)
         .select((GenreMapping::as_select(), Genre::as_select()))
         .load::<(GenreMapping, Genre)>(&mut db)
-        .await?;
+        .await?
+        .grouped_by(&comics);
 
-    let genres = genres.grouped_by(&comics);
-
-    let comics_ratings: Vec<ComicRating> = ComicRating::belonging_to(&comics)
+    let comics_ratings = ComicRating::belonging_to(&comics)
         .select(ComicRating::as_select())
         .load::<ComicRating>(&mut db)
-        .await?;
+        .await?
+        .grouped_by(&comics);
 
-    let comics_ratings: Vec<Vec<ComicRating>> = comics_ratings.grouped_by(&comics);
-
-    let comics: Result<Vec<ComicResponse>, UsersError> =
-        multizip((comics, genres, chapters_and_pages, comics_ratings))
-            .map(move |(comic, genres, chapter_and_pages, comic_ratings)| {
-                Ok(ComicResponse {
-                    id: comic.id,
-                    author: UserResponseBrief {
-                        id: user.id,
-                        displayname: user.displayname.clone(),
-                        username: user.username.clone(),
-                        email: user.email.clone(),
-                        role: user.role,
-                    },
-                    title: comic.title,
-                    slug: comic.slug,
-                    description: comic.description,
-                    rating: average_rating(comic_ratings),
-                    created_at: comic.created_at.to_string(),
-                    chapters: chapter_and_pages
-                        .into_iter()
-                        .map(|(chapter, pages)| chapter.into_response_brief(pages))
-                        .collect(),
-                    genres: genres
-                        .into_iter()
-                        .map(|(_genre_mapping, genre)| ComicGenre {
-                            id: genre.id,
-                            name: genre.name,
-                        })
-                        .collect(),
-                })
+    let comics: Result<Vec<ComicResponseBrief>, UsersError> =
+        multizip((comics, genres, chapters_counts, comics_ratings))
+            .map(|(comic, genres, chapters_count, comic_ratings)| {
+                Ok(comic.into_response_brief(
+                    genres.into_iter().map(|(_, genre)| genre).collect(),
+                    chapters_count,
+                    average_rating(comic_ratings),
+                ))
             })
             .collect();
 
