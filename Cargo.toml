@@ -47,8 +47,8 @@ axum-extra = { version = "0.7.4" }
 time = "0.3.21"
 tower-cookies = { version = "0.9.0", features = ["private"] }
 tracing-appender = "0.2.2"
-diesel = { version = "2.0.4", features = ["postgres", "chrono", "uuid"] }
-diesel-async = { version = "0.2.2", features = ["tokio-postgres", "deadpool"] }
+diesel = { version = "2.1.0", features = ["postgres", "chrono", "uuid"] }
+diesel-async = { version = "0.3.2", features = ["tokio-postgres", "deadpool"] }
 diesel_migrations_async = { git = "https://github.com/aumetra/diesel_migrations_async", features = ["postgres"] }
 toml = "0.7.4"
 lettre = { version = "0.10.4", default-features = false, features = ["tokio1", "tokio1-rustls-tls", "smtp-transport", "builder"] }
