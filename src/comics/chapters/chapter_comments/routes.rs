@@ -28,9 +28,9 @@ use super::{
 
 pub fn chapter_comments_router() -> Router<AppState> {
     Router::new()
-        .route("/", get(get_comments))
-        .route("/", post(create_comment))
-        .route("/", delete(delete_comment))
+        .route("/:chapter_id/comments", get(get_comments))
+        .route("/:chapter_id/comments", post(create_comment))
+        .route("/comments/:comment_id", delete(delete_comment))
 }
 
 #[utoipa::path(
@@ -183,7 +183,7 @@ pub async fn create_comment(
 
 #[utoipa::path(
     delete,
-    path = "/api/v1/comics/chapters/:chapter_id/comments",
+    path = "/api/v1/comics/chapters/comments/:comment_id",
     responses(
         (status = 200, description = "Specified comment has been successfully deleted. returned deleted comment's ID", body = Uuid),
         (status = StatusCode::BAD_REQUEST, description = "Invalid Comment ID", body = ErrorResponse),
