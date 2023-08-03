@@ -10,16 +10,10 @@
 
     let { comic, comments } = data;
 
-    async function sendComment(
-        e: SubmitEvent,
-        parent_comment_id: string | null,
-        comic_id: string
-    ) {
-        const form = new FormData(e.target as HTMLFormElement);
+    let inputComment = "";
 
-        const comment = form.get("comment");
-
-        if (comment?.toString() == null || comment?.toString().length < 1) {
+    async function sendComment(comic_id: string) {
+        if (inputComment.length < 1) {
             return;
         }
 
@@ -32,8 +26,7 @@
                     "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
-                    content: comment,
-                    parent_comment_id: parent_comment_id,
+                    content: inputComment,
                 }),
             }
         );
@@ -45,6 +38,7 @@
             comments.unshift((await res.json()) as ComicCommentResponse);
             // force it to refresh
             comments = comments;
+            inputComment = "";
         }
     }
 </script>
@@ -70,13 +64,13 @@
     <div class="comments">
         <span>comments:</span>
         {#if $currentUser}
-            <form
-                class="new-comment"
-                on:submit|preventDefault={(e) => sendComment(e, null, comic.id)}
-            >
-                <input type="text" name="comment" placeholder="Add a comment" />
-                <button type="submit">send</button>
-            </form>
+            <div class="new-comment">
+                <input type="text" name="comment" placeholder="Add a comment"
+                    bind:value={inputComment}
+                    on:keypress={(e) => { if (e.key === "Enter") sendComment(comic.id) }}/>
+
+                <button type="submit" on:click={() => sendComment(comic.id)}>send</button>
+            </div>
         {:else}
             <h3><a href="/login">need to be logged in</a></h3>
         {/if}

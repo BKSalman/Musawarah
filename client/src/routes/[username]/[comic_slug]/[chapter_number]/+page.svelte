@@ -1,25 +1,18 @@
 <script lang="ts">
     import { page } from '$app/stores';
-    import type { PageServerData } from './$types';
     import Comment from "$lib/components/Comment.svelte";
     import { currentUser } from '../../../stores';
     import { goto } from '$app/navigation';
     import type { ChapterCommentResponse } from 'bindings/ChapterCommentResponse';
 
-    export let data: PageServerData;
+    export let data;
 
     let { chapter, comments } = data;
 
-    async function sendComment(
-        e: SubmitEvent,
-        parent_comment_id: string | null,
-        chapter_id: string
-    ) {
-        const form = new FormData(e.target as HTMLFormElement);
+    let inputComment = "";
 
-        const comment = form.get("comment");
-
-        if (comment?.toString() == null || comment?.toString().length < 1) {
+    async function sendComment(chapter_id: string) {
+        if (inputComment.length < 1) {
             return;
         }
 
@@ -32,8 +25,7 @@
                     "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
-                    content: comment,
-                    parent_comment_id: parent_comment_id,
+                    content: inputComment,
                 }),
             }
         );
@@ -45,6 +37,7 @@
             comments.unshift((await res.json()) as ChapterCommentResponse);
             // force it to refresh
             comments = comments;
+            inputComment = "";
         }
     }
 </script>
@@ -70,13 +63,13 @@
     <div class="comments">
         <span>comments:</span>
         {#if $currentUser}
-            <form
-                class="new-comment"
-                on:submit|preventDefault={(e) => sendComment(e, null, chapter.id)}
-            >
-                <input type="text" name="comment" placeholder="Add a comment" />
-                <button type="submit">send</button>
-            </form>
+            <div class="new-comment">
+                <input type="text" name="comment"
+                    placeholder="Add a comment"
+                    bind:value={inputComment}
+                    on:keypress={(e) => { if (e.key === "Enter") sendComment(chapter.id) }}/>
+                <button type="submit" on:click={() => sendComment(chapter.id)}>send</button>
+            </div>
         {:else}
             <h3><a href="/login">need to be logged in</a></h3>
         {/if}

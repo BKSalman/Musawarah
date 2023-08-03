@@ -11,17 +11,14 @@
     export let indent = 0;
     let openChildren = comment.parent_comment == null;
     let openReplyBox = false;
+    let inputComment = "";
 
     function isComicComment(object: any): object is ComicCommentResponse {
         return 'comic_id' in object;
     }
 
-    async function sendComment(e: SubmitEvent, parent_comment_id: string | null) {
-        const form = new FormData(e.target as HTMLFormElement);
-
-        const formComment = form.get("comment");
-
-        if (formComment?.toString() == null || formComment?.toString().length < 1) {
+    async function sendComment(parent_comment_id: string) {
+        if (inputComment.length < 1) {
             return;
         }
 
@@ -34,7 +31,7 @@
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-                content: formComment,
+                content: inputComment,
                 parent_comment_id: parent_comment_id
             }),
         });
@@ -51,8 +48,15 @@
             // force it to refresh
             comment = comment;
             openChildren = true;
+            openReplyBox = false;
+            inputComment = "";
         }
     }
+
+    function focus(el: HTMLElement) {
+        el.focus()
+    }
+
 </script>
 
 <div transition:fly|global={{ y: -10, duration: 100 }} class="comment" style="padding-left: {indent}rem">
@@ -63,12 +67,14 @@
     </button>
     {#if openReplyBox}
         {#if $currentUser}
-            <form transition:fly|global={{ y: -10, duration: 100 }} class="new-reply"
-                on:submit|preventDefault={(e) => sendComment(e, comment.id)}>
+            <div transition:fly|global={{ y: -10, duration: 100 }} class="new-reply">
+                <input type="text" name="comment" placeholder="Add a reply"
+                    bind:value={inputComment}
+                    use:focus
+                    on:keypress={(e) => { if (e.key === "Enter") sendComment(comment.id) }}>
 
-                <input type="text" name="comment" placeholder="Add a reply">
-                <button type="submit">send</button>
-            </form>
+                <button on:click={() => sendComment(comment.id)}>send</button>
+            </div>
         {:else}
             <h3 transition:fly|global={{ y: 10, duration: 200 }}><a href="/login">need to be logged in</a></h3>
         {/if}
