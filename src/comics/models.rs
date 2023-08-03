@@ -31,7 +31,7 @@ pub struct Comic {
     pub user_id: Uuid,
 }
 
-#[derive(Serialize, Deserialize, ToSchema, TS)]
+#[derive(Serialize, ToSchema, TS)]
 #[ts(export)]
 pub struct ComicResponse {
     pub id: Uuid,
@@ -42,6 +42,19 @@ pub struct ComicResponse {
     pub created_at: String,
     pub author: UserResponseBrief,
     pub chapters: Vec<ChapterResponseBrief>,
+    pub genres: Vec<ComicGenre>,
+}
+
+#[derive(Serialize, ToSchema, TS)]
+#[ts(export)]
+pub struct ComicResponseBrief {
+    pub id: Uuid,
+    pub title: String,
+    pub slug: String,
+    pub description: Option<String>,
+    pub rating: f64,
+    pub chapters_count: i64,
+    pub created_at: String,
     pub genres: Vec<ComicGenre>,
 }
 
