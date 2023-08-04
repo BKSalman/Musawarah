@@ -15,7 +15,10 @@ export const load = (async ({ fetch, params }) => {
     const data: ChapterResponse = await res.json();
 
     return {
-        chapter: data
+        chapter: data,
+        comic_slug,
+        username,
+        chapter_number,
     };
 
 }) satisfies PageServerLoad;
