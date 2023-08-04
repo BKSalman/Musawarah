@@ -31,6 +31,7 @@ pub struct ComicsParams {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Order {
     Latest(DateTime<chrono::Utc>),
     Best(f64),

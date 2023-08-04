@@ -293,11 +293,11 @@ pub async fn get_comics(
         .select((Comic::as_select(), User::as_select(), average_rating));
 
     let (comics, users, ratings): (Vec<Comic>, Vec<User>, Vec<f64>) = match params.order {
-        Order::Latest(prev_time) => {
+        Order::Latest(prev_date) => {
             let query = query
                 .filter(
-                    comics::created_at.lt(prev_time).or(comics::created_at
-                        .eq(prev_time)
+                    comics::created_at.lt(prev_date).or(comics::created_at
+                        .eq(prev_date)
                         .and(comics::id.lt(params.max_id))),
                 )
                 .order((comics::created_at.desc(), comics::id.desc()));
