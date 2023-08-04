@@ -68,6 +68,7 @@ impl FromSql<crate::schema::sql_types::Userrole, Pg> for UserRole {
 
 #[derive(Insertable, Queryable, Selectable, Identifiable, Debug)]
 #[diesel(table_name = users)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct User {
     pub id: Uuid,
     pub first_name: Option<String>,
@@ -84,9 +85,22 @@ pub struct User {
     pub last_login: Option<NaiveDateTime>,
 }
 
+impl User {
+    pub fn into_response_brief(self) -> UserResponseBrief {
+        UserResponseBrief {
+            id: self.id,
+            displayname: self.displayname,
+            username: self.username,
+            email: self.email,
+            role: self.role,
+        }
+    }
+}
+
 #[derive(Insertable, Queryable, Identifiable, Associations, Selectable, Debug)]
 #[diesel(belongs_to(User))]
 #[diesel(table_name = profile_images)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct ProfileImage {
     pub id: Uuid,
     pub path: String,

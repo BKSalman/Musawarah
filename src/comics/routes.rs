@@ -6,19 +6,24 @@ use axum::{
     Json, Router,
 };
 use chrono::Utc;
-use diesel::prelude::*;
+use diesel::{dsl::avg, prelude::*};
 use diesel_async::{scoped_futures::ScopedFutureExt, AsyncConnection, RunQueryDsl};
 use garde::Validate;
 use itertools::multizip;
+use itertools::Itertools;
 use uuid::Uuid;
 
 use crate::{
     auth::AuthExtractor,
+    coalesce,
     comics::chapters::models::Chapter,
-    comics::comic_genres::models::{ComicGenre, Genre, GenreMapping},
-    comics::{models::NewComicRating, SortingOrder},
+    comics::models::{ComicsParams, NewComicRating, Order},
+    comics::{
+        comic_genres::models::{Genre, GenreMapping},
+        models::ComicsPagination,
+    },
     schema::{comic_genres, comic_genres_mapping, comic_ratings, comics, users},
-    users::models::{User, UserResponseBrief, UserRole},
+    users::models::{User, UserRole},
     utils::average_rating,
     AppState, InnerAppState,
 };
@@ -29,7 +34,7 @@ use super::{
     comic_genres::routes::comic_genres_router,
     models::{Comic, ComicRating, ComicResponse, CreateComic, UpdateComic},
     utils::slugify,
-    ComicsError, ComicsParams,
+    ComicsError,
 };
 
 pub fn comics_router() -> Router<AppState> {
@@ -92,7 +97,7 @@ pub async fn create_comic(
                     .get_result(transaction)
                     .await?;
 
-                let genres: Vec<ComicGenre> = if let Some(genres) = payload.genres {
+                let genres: Vec<Genre> = if let Some(genres) = payload.genres {
                     let db_genre_mappings: Vec<GenreMapping> = genres
                         .iter()
                         .map(|genre| GenreMapping {
@@ -106,34 +111,16 @@ pub async fn create_comic(
                         .execute(transaction)
                         .await?;
 
-                    let genres = GenreMapping::belonging_to(&comic)
+                    GenreMapping::belonging_to(&comic)
                         .inner_join(comic_genres::table)
                         .select(Genre::as_select())
                         .load::<Genre>(transaction)
-                        .await?;
-
-                    genres
-                        .into_iter()
-                        .map(|genre| ComicGenre {
-                            id: genre.id,
-                            name: genre.name,
-                        })
-                        .collect()
+                        .await?
                 } else {
                     vec![]
                 };
 
-                Ok(ComicResponse {
-                    id: comic.id,
-                    author: auth.current_user,
-                    title: comic.title,
-                    slug: comic.slug,
-                    description: comic.description,
-                    rating: 0.0,
-                    created_at: comic.created_at.to_string(),
-                    chapters: vec![],
-                    genres,
-                })
+                Ok(comic.into_resonse(auth.current_user, genres, vec![], 0.0))
             }
             .scope_boxed()
         })
@@ -198,34 +185,12 @@ pub async fn get_comic(
         .load(&mut db)
         .await?;
 
-    let comic = ComicResponse {
-        id: comic.id,
-        author: UserResponseBrief {
-            id: user.id,
-            displayname: user.displayname,
-            username: user.username,
-            email: user.email,
-            role: user.role,
-        },
-        title: comic.title,
-        slug: comic.slug,
-        description: comic.description,
-        rating: average_rating(comic_ratings),
-        created_at: comic.created_at.to_string(),
-        chapters: chapters_and_pages
-            .into_iter()
-            .map(|(chapter, pages)| chapter.into_response_brief(pages))
-            .collect(),
-        genres: genres
-            .into_iter()
-            .map(|genre| ComicGenre {
-                id: genre.id,
-                name: genre.name,
-            })
-            .collect(),
-    };
-
-    Ok(Json(comic))
+    Ok(Json(comic.into_resonse(
+        user.into_response_brief(),
+        genres,
+        chapters_and_pages,
+        average_rating(comic_ratings),
+    )))
 }
 
 /// Get comic by slug and username
@@ -285,40 +250,19 @@ pub async fn get_comic_by_slug(
         .load(&mut db)
         .await?;
 
-    let comic = ComicResponse {
-        id: comic.id,
-        author: UserResponseBrief {
-            id: user.id,
-            displayname: user.displayname,
-            username: user.username,
-            email: user.email,
-            role: user.role,
-        },
-        title: comic.title,
-        slug: comic.slug,
-        description: comic.description,
-        rating: average_rating(comic_ratings),
-        created_at: comic.created_at.to_string(),
-        chapters: chapters_and_pages
-            .into_iter()
-            .map(|(chapter, pages)| chapter.into_response_brief(pages))
-            .collect(),
-        genres: genres
-            .into_iter()
-            .map(|genre| ComicGenre {
-                id: genre.id,
-                name: genre.name,
-            })
-            .collect(),
-    };
-
-    Ok(Json(comic))
+    Ok(Json(comic.into_resonse(
+        user.into_response_brief(),
+        genres,
+        chapters_and_pages,
+        average_rating(comic_ratings),
+    )))
 }
 
 /// Get comics with pagination and genre filtering
 #[utoipa::path(
     get,
     path = "/api/v1/comics",
+    request_body(content = ComicsPagination, content_type = "application/json"),
     params(
         ComicsParams,
     ),
@@ -331,43 +275,66 @@ pub async fn get_comic_by_slug(
 #[axum::debug_handler(state = AppState)]
 pub async fn get_comics(
     State(state): State<Arc<InnerAppState>>,
-    Query(params): Query<ComicsParams>,
+    Query(filters): Query<ComicsParams>,
+    pagination: Option<Json<ComicsPagination>>,
 ) -> Result<Json<Vec<ComicResponse>>, ComicsError> {
-    tracing::debug!("cursor: {:#?}", params);
+    tracing::debug!("cursor: {:#?}", pagination);
     let mut db = state.pool.get().await?;
+    let Json(pagination) = pagination.unwrap_or_default();
 
-    let mut comics_query = comics::table
-        .inner_join(users::table)
+    // TODO: (possibly?) add ascending ordering, this requires finding someway to refactor this
+    // TODO: change created_at to published_at when we have a frontend option to publish comics and
+    // a way to not bypass this by publishing and unpublishing comics
+    let average_rating = coalesce(avg(comic_ratings::rating).nullable(), 0.0);
+
+    let query = comics::table
         .left_join(comic_ratings::table)
-        // PERF:: find a way to do the left join only when there's a genre_filter
-        .left_join(comic_genres_mapping::table.inner_join(comic_genres::table))
-        .filter(comics::id.gt(params.min_id))
-        .filter(comics::id.lt(params.max_id))
-        .into_boxed();
+        .inner_join(users::table)
+        .group_by((comics::id, users::id))
+        .limit(10)
+        .select((Comic::as_select(), User::as_select(), average_rating));
 
-    if let Some(genre_filter) = params.genre {
-        comics_query = comics_query.filter(comic_genres::id.eq(genre_filter));
-    }
+    let (comics, users, ratings): (Vec<Comic>, Vec<User>, Vec<f64>) = match pagination.order {
+        Order::Latest(prev_date) => {
+            let query = query
+                .filter(
+                    comics::created_at.lt(prev_date).or(comics::created_at
+                        .eq(prev_date)
+                        .and(comics::id.lt(pagination.max_id))),
+                )
+                .order((comics::created_at.desc(), comics::id.desc()));
 
-    if let Some(sorting_order) = params.sorting {
-        match sorting_order {
-            SortingOrder::Descending => {
-                comics_query = comics_query.order(comic_ratings::rating.desc())
+            if let Some(genre_id) = filters.genre {
+                query
+                    .left_join(comic_genres_mapping::table.inner_join(comic_genres::table))
+                    .filter(comic_genres::id.eq(genre_id))
+                    .load::<(Comic, User, f64)>(&mut db)
+            } else {
+                query.load::<(Comic, User, f64)>(&mut db)
             }
-            SortingOrder::Ascending => {
-                comics_query = comics_query.order(comic_ratings::rating.asc())
+        }
+        Order::Best(prev_average) => {
+            let query = query
+                .having(
+                    average_rating.lt(prev_average).or(average_rating
+                        .eq(prev_average)
+                        .and(comics::id.lt(pagination.max_id))),
+                )
+                .order((average_rating.desc(), comics::id.desc()));
+
+            if let Some(genre_id) = filters.genre {
+                query
+                    .left_join(comic_genres_mapping::table.inner_join(comic_genres::table))
+                    .filter(comic_genres::id.eq(genre_id))
+                    .load::<(Comic, User, f64)>(&mut db)
+            } else {
+                query.load::<(Comic, User, f64)>(&mut db)
             }
         }
     }
-
-    let (comics, users): (Vec<Comic>, Vec<User>) = comics_query
-        .distinct()
-        .limit(10)
-        .select((Comic::as_select(), User::as_select()))
-        .load::<(Comic, User)>(&mut db)
-        .await?
-        .into_iter()
-        .unzip();
+    .await?
+    .into_iter()
+    .multiunzip();
 
     let chapters = Chapter::belonging_to(&comics)
         .load::<Chapter>(&mut db)
@@ -394,42 +361,15 @@ pub async fn get_comics(
 
     let genres = genres.grouped_by(&comics);
 
-    let comics_ratings: Vec<ComicRating> = ComicRating::belonging_to(&comics)
-        .select(ComicRating::as_select())
-        .load::<ComicRating>(&mut db)
-        .await?;
-
-    let comics_ratings: Vec<Vec<ComicRating>> = comics_ratings.grouped_by(&comics);
-
     let comics: Result<Vec<ComicResponse>, ComicsError> =
-        multizip((users, comics, genres, chapters_and_pages, comics_ratings))
-            .map(|(user, comic, genres, chapter_and_pages, comic_ratings)| {
-                Ok(ComicResponse {
-                    id: comic.id,
-                    title: comic.title,
-                    slug: comic.slug,
-                    description: comic.description,
-                    created_at: comic.created_at.to_string(),
-                    rating: average_rating(comic_ratings),
-                    author: UserResponseBrief {
-                        id: user.id,
-                        displayname: user.displayname,
-                        username: user.username,
-                        email: user.email,
-                        role: user.role,
-                    },
-                    chapters: chapter_and_pages
-                        .into_iter()
-                        .map(|(chapter, pages)| chapter.into_response_brief(pages))
-                        .collect(),
-                    genres: genres
-                        .into_iter()
-                        .map(|(_genre_mapping, genre)| ComicGenre {
-                            id: genre.id,
-                            name: genre.name,
-                        })
-                        .collect(),
-                })
+        multizip((comics, users, genres, chapters_and_pages, ratings))
+            .map(|(comic, user, genres, chapter_and_pages, rating)| {
+                Ok(comic.into_resonse(
+                    user.into_response_brief(),
+                    genres.into_iter().map(|(_, genre)| genre).collect(),
+                    chapter_and_pages,
+                    rating,
+                ))
             })
             .collect();
 
@@ -508,7 +448,7 @@ pub async fn delete_comic(
 
 /// Rate comic
 #[utoipa::path(
-    get,
+    post,
     path = "/api/v1/comics/:comic_id/rate",
     request_body(content = NewComicRating, description = "Validation:\n- rating: 0-5", content_type = "application/json"),
     responses(),

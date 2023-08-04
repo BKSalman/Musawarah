@@ -583,6 +583,7 @@ pub async fn rate_chapter(
 }
 
 /// Get chapters of a comic with pagination
+// TODO: remove later if not used
 #[utoipa::path(
     get,
     path = "/api/v1/comics/:comic_id/chapters",

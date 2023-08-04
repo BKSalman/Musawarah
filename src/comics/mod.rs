@@ -1,11 +1,8 @@
 use axum::{http::StatusCode, response::IntoResponse};
 use diesel::result::{DatabaseErrorKind, Error::DatabaseError};
 use diesel_async::pooled_connection::deadpool::PoolError;
-use serde::Deserialize;
-use utoipa::IntoParams;
-use uuid::Uuid;
 
-use crate::{ErrorResponse, SortingOrder};
+use crate::ErrorResponse;
 
 use self::chapters::routes::FILE_SIZE_LIMIT_MB;
 
@@ -15,18 +12,6 @@ pub mod comic_genres;
 pub mod models;
 pub mod routes;
 mod utils;
-
-#[derive(Debug, Deserialize, IntoParams)]
-pub struct ComicsParams {
-    #[serde(default = "Uuid::nil")]
-    pub min_id: Uuid,
-    #[serde(default = "Uuid::max")]
-    pub max_id: Uuid,
-    #[serde(default)]
-    pub genre: Option<i32>,
-    #[serde(default)]
-    pub sorting: Option<SortingOrder>,
-}
 
 #[derive(thiserror::Error, Debug)]
 pub enum ComicsError {

@@ -21,6 +21,7 @@ use crate::{
 #[diesel(belongs_to(User))]
 #[diesel(belongs_to(Comic))]
 #[diesel(table_name = comic_chapters)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Chapter {
     pub id: Uuid,
     pub title: String,
@@ -92,6 +93,7 @@ impl Chapter {
 #[diesel(belongs_to(Chapter))]
 #[diesel(belongs_to(User))]
 #[diesel(table_name = chapter_pages)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct ChapterPage {
     pub id: Uuid,
     pub number: i32,
@@ -109,6 +111,7 @@ pub struct ChapterPage {
 #[diesel(belongs_to(User))]
 #[diesel(belongs_to(Chapter))]
 #[diesel(table_name = chapter_ratings)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct ChapterRating {
     pub id: Uuid,
     pub rating: f64,
@@ -134,6 +137,7 @@ pub struct CreateChapter {
 
 #[derive(AsChangeset, Deserialize, ToSchema, Debug, TS)]
 #[diesel(table_name = comic_chapters)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
 #[ts(export)]
 pub struct UpdateChapter {
     pub title: Option<String>,
@@ -143,6 +147,7 @@ pub struct UpdateChapter {
 
 #[derive(AsChangeset, Deserialize, ToSchema, Debug, TS)]
 #[diesel(table_name = chapter_pages)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
 #[ts(export)]
 pub struct UpdateChapterPage {
     pub description: Option<String>,
