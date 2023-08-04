@@ -132,6 +132,8 @@ pub struct AppState {
         schemas(comics::models::ComicResponse),
         schemas(comics::models::ComicResponseBrief),
         schemas(comics::models::NewComicRating),
+        schemas(comics::models::ComicsPagination),
+        schemas(comics::models::Order),
         schemas(comics::comic_genres::models::ComicGenre),
         schemas(comics::chapters::models::CreateChapter),
         schemas(comics::chapters::models::UpdateChapter),

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     routing::{delete, get, post, put},
     Json, Router,
 };
@@ -17,10 +17,10 @@ use crate::{
     auth::AuthExtractor,
     coalesce,
     comics::chapters::models::Chapter,
-    comics::models::NewComicRating,
+    comics::models::{ComicsParams, NewComicRating, Order},
     comics::{
         comic_genres::models::{Genre, GenreMapping},
-        Order,
+        models::ComicsPagination,
     },
     schema::{comic_genres, comic_genres_mapping, comic_ratings, comics, users},
     users::models::{User, UserRole},
@@ -34,7 +34,7 @@ use super::{
     comic_genres::routes::comic_genres_router,
     models::{Comic, ComicRating, ComicResponse, CreateComic, UpdateComic},
     utils::slugify,
-    ComicsError, ComicsParams,
+    ComicsError,
 };
 
 pub fn comics_router() -> Router<AppState> {
@@ -262,6 +262,7 @@ pub async fn get_comic_by_slug(
 #[utoipa::path(
     get,
     path = "/api/v1/comics",
+    request_body(content = ComicsPagination, content_type = "application/json"),
     params(
         ComicsParams,
     ),
@@ -274,11 +275,12 @@ pub async fn get_comic_by_slug(
 #[axum::debug_handler(state = AppState)]
 pub async fn get_comics(
     State(state): State<Arc<InnerAppState>>,
-    params: Option<Json<ComicsParams>>,
+    Query(filters): Query<ComicsParams>,
+    pagination: Option<Json<ComicsPagination>>,
 ) -> Result<Json<Vec<ComicResponse>>, ComicsError> {
-    tracing::debug!("cursor: {:#?}", params);
+    tracing::debug!("cursor: {:#?}", pagination);
     let mut db = state.pool.get().await?;
-    let Json(params) = params.unwrap_or_default();
+    let Json(pagination) = pagination.unwrap_or_default();
 
     // TODO: (possibly?) add ascending ordering, this requires finding someway to refactor this
     // TODO: change created_at to published_at when we have a frontend option to publish comics and
@@ -292,17 +294,17 @@ pub async fn get_comics(
         .limit(10)
         .select((Comic::as_select(), User::as_select(), average_rating));
 
-    let (comics, users, ratings): (Vec<Comic>, Vec<User>, Vec<f64>) = match params.order {
+    let (comics, users, ratings): (Vec<Comic>, Vec<User>, Vec<f64>) = match pagination.order {
         Order::Latest(prev_date) => {
             let query = query
                 .filter(
                     comics::created_at.lt(prev_date).or(comics::created_at
                         .eq(prev_date)
-                        .and(comics::id.lt(params.max_id))),
+                        .and(comics::id.lt(pagination.max_id))),
                 )
                 .order((comics::created_at.desc(), comics::id.desc()));
 
-            if let Some(genre_id) = params.genre {
+            if let Some(genre_id) = filters.genre {
                 query
                     .left_join(comic_genres_mapping::table.inner_join(comic_genres::table))
                     .filter(comic_genres::id.eq(genre_id))
@@ -316,11 +318,11 @@ pub async fn get_comics(
                 .having(
                     average_rating.lt(prev_average).or(average_rating
                         .eq(prev_average)
-                        .and(comics::id.lt(params.max_id))),
+                        .and(comics::id.lt(pagination.max_id))),
                 )
                 .order((average_rating.desc(), comics::id.desc()));
 
-            if let Some(genre_id) = params.genre {
+            if let Some(genre_id) = filters.genre {
                 query
                     .left_join(comic_genres_mapping::table.inner_join(comic_genres::table))
                     .filter(comic_genres::id.eq(genre_id))

@@ -1,8 +1,8 @@
-use chrono::DateTime;
+use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
-use utoipa::ToSchema;
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use crate::{
@@ -10,7 +10,7 @@ use crate::{
     comics::comic_genres::models::ComicGenre,
     schema::{comic_ratings, comics},
     users::models::{User, UserResponseBrief},
-    Rating,
+    Rating, SortingOrder,
 };
 
 use super::{
@@ -61,6 +61,46 @@ pub struct ComicResponseBrief {
     pub chapters_count: i64,
     pub created_at: String,
     pub genres: Vec<ComicGenre>,
+}
+
+#[derive(Debug, Deserialize, ToSchema, TS)]
+#[ts(export)]
+pub struct ComicsPagination {
+    #[serde(default = "Uuid::max")]
+    pub max_id: Uuid,
+    #[serde(default)]
+    pub order: Order,
+}
+
+#[derive(Debug, Deserialize, IntoParams)]
+pub struct ComicsParams {
+    #[serde(default)]
+    pub genre: Option<i32>,
+    #[serde(default)]
+    pub sorting: Option<SortingOrder>,
+}
+
+#[derive(Debug, Deserialize, Serialize, ToSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export)]
+pub enum Order {
+    Latest(DateTime<chrono::Utc>),
+    Best(f64),
+}
+
+impl Default for Order {
+    fn default() -> Self {
+        Self::Latest(Utc::now())
+    }
+}
+
+impl Default for ComicsPagination {
+    fn default() -> Self {
+        ComicsPagination {
+            max_id: Uuid::max(),
+            order: Order::default(),
+        }
+    }
 }
 
 impl Comic {
