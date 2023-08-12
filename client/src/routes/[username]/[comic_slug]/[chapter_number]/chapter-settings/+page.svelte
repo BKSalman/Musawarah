@@ -1,8 +1,10 @@
 <script lang="ts">
     import Fa from "svelte-fa";
+    import { page } from "$app/stores";
     import type { UpdateChapter } from "bindings/UpdateChapter";
     import { faX } from "@fortawesome/free-solid-svg-icons";
     import { invalidate } from "$app/navigation";
+    import { faArrowLeft } from "@fortawesome/free-solid-svg-icons";
 
     export let data;
 
@@ -102,6 +104,13 @@
 <svelte:window on:dragover={(e) => e.preventDefault()} on:drop={(e) => e.preventDefault()} />
 
 <div class="main-container">
+    <div>
+        <a
+            class="back-button"
+            href={`/${$page.params.username}/${$page.params.comic_slug}/${$page.params.chapter_number}`}
+            ><Fa size="1.5x" icon={faArrowLeft} /></a
+        >
+    </div>
   <form action="" on:submit|preventDefault={updateChapter}>
     <label for="chapter_title">Chapter Title:</label>
     <span>{chapter.title}</span>
@@ -265,5 +274,11 @@
       justify-content: center;
       align-items: center;
       gap: 1.5rem;
+    }
+    .back-button {
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: black;
     }
 </style>
