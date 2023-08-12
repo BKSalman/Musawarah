@@ -1,9 +1,11 @@
 <script lang="ts">
-    import { page } from '$app/stores';
+    import { page } from "$app/stores";
     import Comment from "$lib/components/Comment.svelte";
-    import { currentUser } from '../../../stores';
-    import { goto } from '$app/navigation';
-    import type { ChapterCommentResponse } from 'bindings/ChapterCommentResponse';
+    import { currentUser } from "../../../stores";
+    import { goto } from "$app/navigation";
+    import type { ChapterCommentResponse } from "bindings/ChapterCommentResponse";
+    import Fa from "svelte-fa";
+    import { faArrowLeft } from "@fortawesome/free-solid-svg-icons";
 
     export let data;
 
@@ -43,32 +45,52 @@
 </script>
 
 <div class="main-container">
+    <div>
+        <a
+            class="back-button"
+            href={`/${$page.params.username}/${$page.params.comic_slug}`}
+            ><Fa size="1.5x" icon={faArrowLeft} /></a
+        >
+    </div>
     <div class="title-bar">
         <div class="title"><strong>Title: </strong>{chapter.title}</div>
 
         {#if chapter.description}
-            <div class="description"><strong>Description: </strong>{chapter.description}</div>
+            <div class="description">
+                <strong>Description: </strong>{chapter.description}
+            </div>
         {/if}
         <a href={`${$page.url.href}/chapter-settings`}>Settings</a>
     </div>
-    <br/>
+    <br />
     <div class="pages">
         {#each chapter.pages as page}
-          {#if page.description}
-              <div class="">{page.description}</div>
-          {/if}
-          <img class="page-image" src={`https://pub-26fa98a6ad0f4dd388ce1e8e1450be41.r2.dev/${page.image.path}`} alt="page"/>
+            {#if page.description}
+                <div class="">{page.description}</div>
+            {/if}
+            <img
+                class="page-image"
+                src={`https://pub-26fa98a6ad0f4dd388ce1e8e1450be41.r2.dev/${page.image.path}`}
+                alt="page"
+            />
         {/each}
     </div>
     <div class="comments">
         <span>comments:</span>
         {#if $currentUser}
             <div class="new-comment">
-                <input type="text" name="comment"
+                <input
+                    type="text"
+                    name="comment"
                     placeholder="Add a comment"
                     bind:value={inputComment}
-                    on:keypress={(e) => { if (e.key === "Enter") sendComment(chapter.id) }}/>
-                <button type="submit" on:click={() => sendComment(chapter.id)}>send</button>
+                    on:keypress={(e) => {
+                        if (e.key === "Enter") sendComment(chapter.id);
+                    }}
+                />
+                <button type="submit" on:click={() => sendComment(chapter.id)}
+                    >send</button
+                >
             </div>
         {:else}
             <h3><a href="/login">need to be logged in</a></h3>
@@ -80,23 +102,29 @@
 </div>
 
 <style>
-.main-container {
-    display: flex;
-    flex-direction: column;
-    width: 80%;
-}
-.main-container > * {
-    margin-bottom: 10px;
-}
-.pages {
-    flex: 1;
-    padding: 20px;
-    margin-left: 20px;
-    margin-right: 20px;
-    background-color: #ffffff;
-    box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
-}
-.page-image {
-    width: 100%;
-}
+    .main-container {
+        display: flex;
+        flex-direction: column;
+        width: 80%;
+    }
+    .main-container > * {
+        margin-bottom: 10px;
+    }
+    .pages {
+        flex: 1;
+        padding: 20px;
+        margin-left: 20px;
+        margin-right: 20px;
+        background-color: #ffffff;
+        box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+    }
+    .page-image {
+        width: 100%;
+    }
+    .back-button {
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: black;
+    }
 </style>
