@@ -39,6 +39,9 @@
       devShell = mkShell {
           NIX_CFLAGS_LINK = "-fuse-ld=mold";
           packages = [
+            # test ci locally
+            act
+            
             # general utilities
             exa
             fd

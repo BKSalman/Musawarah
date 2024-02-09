@@ -8,7 +8,7 @@ use axum::{
     Router,
 };
 use diesel_async::pooled_connection::{deadpool::Pool, AsyncDieselConnectionManager};
-use diesel_migrations_async::{embed_migrations, EmbeddedMigrations};
+use diesel_migrations::{embed_migrations, EmbeddedMigrations};
 use dotenvy::dotenv;
 use musawarah::{
     comics::routes::comics_router, migrations::run_migrations, s3::helpers::setup_storage,
@@ -43,14 +43,12 @@ async fn main() {
 
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL env variable");
 
+    run_migrations(database_url.clone())
+        .await
+        .expect("Run migrations");
+
     let config = AsyncDieselConnectionManager::<diesel_async::AsyncPgConnection>::new(database_url);
     let pool = Pool::builder(config).build().expect("db connection pool");
-
-    let mut db = pool.get().await.expect("db connection");
-
-    run_migrations(&mut db).await.expect("Run migrations");
-
-    drop(db);
 
     let config = match Config::load_config() {
         Ok(config) => config,
