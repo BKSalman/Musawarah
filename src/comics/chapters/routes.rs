@@ -5,6 +5,7 @@ use axum::{
     routing::{delete, get, post, put},
     Json, Router,
 };
+use bytes::BufMut;
 use chrono::Utc;
 use diesel::BelongingToDsl;
 use diesel::GroupedBy;
@@ -252,8 +253,9 @@ pub async fn create_chapter_page(
         ChaptersError::BadRequest
     })?;
 
-    let new_chapter_page = db
-        .transaction::<_, ChaptersError, _>(|transaction| {
+    let new_chapter_page = {
+        let state = state.clone();
+        db.transaction::<_, ChaptersError, _>(|transaction| {
             async move {
                 // save chapter page to db
                 let chapter_page = ChapterPage {
@@ -299,7 +301,14 @@ pub async fn create_chapter_page(
             .scope_boxed()
         })
         // TODO: error handling
-        .await?;
+        .await?
+    };
+
+    let bytes = state
+        .storage
+        .get_bytes(&new_chapter_page.path)
+        .await
+        .unwrap();
 
     let chapter_page = ChapterPageResponse {
         id: new_chapter_page.id,
@@ -308,6 +317,7 @@ pub async fn create_chapter_page(
         image: ImageResponse {
             path: new_chapter_page.path,
             content_type: new_chapter_page.content_type,
+            bytes,
         },
     };
 
@@ -380,7 +390,13 @@ pub async fn get_chapter(
         .load::<ChapterRating>(&mut db)
         .await?;
 
-    let chapter = chapter.into_response(chapter_pages, chapter_ratings);
+    let mut pages_bytes = Vec::with_capacity(chapter_pages.len());
+
+    for page in chapter_pages.iter() {
+        pages_bytes.push(state.storage.get_bytes(&page.path).await.unwrap());
+    }
+
+    let chapter = chapter.into_response(chapter_pages, chapter_ratings, pages_bytes);
 
     Ok(Json(chapter))
 }
@@ -426,7 +442,13 @@ pub async fn get_chapter_by_slug(
         .load::<ChapterRating>(&mut db)
         .await?;
 
-    let chapter = chapter.into_response(chapter_pages, chapter_ratings);
+    let mut pages_bytes = Vec::with_capacity(chapter_pages.len());
+
+    for page in chapter_pages.iter() {
+        pages_bytes.push(state.storage.get_bytes(&page.path).await.unwrap());
+    }
+
+    let chapter = chapter.into_response(chapter_pages, chapter_ratings, pages_bytes);
 
     Ok(Json(chapter))
 }
@@ -643,9 +665,16 @@ pub async fn get_chapters(
     let chapter_pages = chapter_pages.grouped_by(&chapters);
     let chapters_ratings = chapters_ratings.grouped_by(&chapters);
 
-    let chapters = multizip((chapters, chapter_pages, chapters_ratings))
-        .map(|(chapter, pages, chapter_ratings)| chapter.into_response(pages, chapter_ratings))
-        .collect();
+    let mut response_chapters: Vec<ChapterResponse> = Vec::new();
 
-    Ok(Json(chapters))
+    for (chapter, pages, chapter_ratings) in multizip((chapters, chapter_pages, chapters_ratings)) {
+        let mut pages_bytes = Vec::with_capacity(pages.len());
+
+        for page in pages.iter() {
+            pages_bytes.push(state.storage.get_bytes(&page.path).await.unwrap());
+        }
+        response_chapters.push(chapter.into_response(pages, chapter_ratings, pages_bytes))
+    }
+
+    Ok(Json(response_chapters))
 }

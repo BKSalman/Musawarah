@@ -149,6 +149,9 @@ pub async fn create_user(
         })
         .await?;
 
+    // TODO: handle error
+    let bytes = state.storage.get_bytes(&profile_image.path).await.unwrap();
+
     Ok(Json(UserResponse {
         id: user.id,
         displayname: user.displayname,
@@ -157,6 +160,7 @@ pub async fn create_user(
         profile_image: ImageResponse {
             path: profile_image.path,
             content_type: profile_image.content_type,
+            bytes,
         },
         role: user.role,
     }))
@@ -410,6 +414,8 @@ pub async fn get_user(
         .first(&mut db)
         .await?;
 
+    let bytes = state.storage.get_bytes(&profile_image.path).await.unwrap();
+
     let user = UserResponse {
         id: user.id,
         displayname: user.displayname,
@@ -418,6 +424,7 @@ pub async fn get_user(
         profile_image: ImageResponse {
             content_type: profile_image.content_type,
             path: profile_image.path,
+            bytes,
         },
         role: user.role,
     };

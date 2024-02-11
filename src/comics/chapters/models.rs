@@ -1,5 +1,6 @@
 use std::fs;
 
+use bytes::Bytes;
 use chrono::DateTime;
 use derive_builder::Builder;
 use diesel::prelude::*;
@@ -11,6 +12,7 @@ use uuid::Uuid;
 use crate::{
     comics::models::Comic,
     common::models::ImageResponse,
+    common::models::ImageResponseBrief,
     schema::{chapter_pages, chapter_ratings, comic_chapters},
     users::models::User,
     utils::average_rating,
@@ -40,6 +42,7 @@ impl Chapter {
         self,
         chapter_pages: Vec<ChapterPage>,
         chapter_ratings: Vec<ChapterRating>,
+        pages_bytes: Vec<Bytes>,
     ) -> ChapterResponse {
         ChapterResponse {
             id: self.id,
@@ -49,13 +52,15 @@ impl Chapter {
             created_at: self.created_at,
             pages: chapter_pages
                 .into_iter()
-                .map(|page| ChapterPageResponse {
+                .zip(pages_bytes)
+                .map(|(page, bytes)| ChapterPageResponse {
                     id: page.id,
                     number: page.number,
                     description: page.description,
                     image: ImageResponse {
                         content_type: page.content_type,
                         path: page.path,
+                        bytes,
                     },
                 })
                 .collect(),
@@ -74,11 +79,11 @@ impl Chapter {
             created_at: self.created_at,
             pages: chapter_pages
                 .into_iter()
-                .map(|page| ChapterPageResponse {
+                .map(|page| ChapterPageResponseBrief {
                     id: page.id,
                     number: page.number,
                     description: page.description,
-                    image: ImageResponse {
+                    image: ImageResponseBrief {
                         content_type: page.content_type,
                         path: page.path,
                     },
@@ -175,7 +180,7 @@ pub struct ChapterResponseBrief {
     pub title: String,
     pub number: i32,
     pub description: Option<String>,
-    pub pages: Vec<ChapterPageResponse>,
+    pub pages: Vec<ChapterPageResponseBrief>,
     pub created_at: DateTime<chrono::Utc>,
 }
 
@@ -211,6 +216,15 @@ pub struct ChapterPageResponse {
     pub number: i32,
     pub description: Option<String>,
     pub image: ImageResponse,
+}
+
+#[derive(Serialize, Deserialize, ToSchema, TS, Debug)]
+#[ts(export)]
+pub struct ChapterPageResponseBrief {
+    pub id: Uuid,
+    pub number: i32,
+    pub description: Option<String>,
+    pub image: ImageResponseBrief,
 }
 
 #[derive(garde::Validate, Serialize, Deserialize, ToSchema, TS, Debug)]
