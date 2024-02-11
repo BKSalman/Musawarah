@@ -142,7 +142,7 @@
         {#each chapter.pages as page}
             <div role="region" class="drop-zone-image-container" >
               <button class="drop-zone-image-x" on:click={() => deleteServerChapterPage(page.id)} ><Fa size="1.5x" icon={faX}/></button>
-              <img class="server-image" src={`https://pub-26fa98a6ad0f4dd388ce1e8e1450be41.r2.dev/${page.image.path}`} alt="">
+              <img class="server-image" src={`http://localhost:6060/api/v1/images/${page.image.path}`} alt="">
             </div>
         {/each}
         <!-- client side images (not yet uploaded) -->
