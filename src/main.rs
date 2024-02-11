@@ -11,9 +11,12 @@ use diesel_async::pooled_connection::{deadpool::Pool, AsyncDieselConnectionManag
 use diesel_migrations::{embed_migrations, EmbeddedMigrations};
 use dotenvy::dotenv;
 use musawarah::{
-    comics::routes::comics_router, migrations::run_migrations, s3::helpers::setup_storage,
-    sessions::refresh_session, users::routes::users_router, ApiDoc, AppState, Config, ConfigError,
-    InnerAppState,
+    comics::routes::comics_router,
+    migrations::run_migrations,
+    s3::{helpers::setup_storage, routes::images_routes},
+    sessions::refresh_session,
+    users::routes::users_router,
+    ApiDoc, AppState, Config, ConfigError, InnerAppState,
 };
 use rand::Rng;
 use std::{
@@ -107,7 +110,8 @@ async fn main() {
 
     let v1_router = Router::new()
         .nest("/api/v1/users", users_router())
-        .nest("/api/v1/comics", comics_router());
+        .nest("/api/v1/comics", comics_router())
+        .nest("/api/v1/images", images_routes());
 
     let app = Router::new()
         .merge(SwaggerUi::new("/swagger-ui").url("/api-doc/openapi.json", ApiDoc::openapi()))

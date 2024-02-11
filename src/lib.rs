@@ -129,7 +129,7 @@ pub struct AppState {
         comics::comic_comments::routes::delete_comment,
     ),
     components(
-        schemas(common::models::ImageResponse),
+        schemas(common::models::ImageMetadataResponse),
         schemas(comics::models::CreateComic),
         schemas(comics::models::UpdateComic),
         schemas(comics::models::ComicResponse),

@@ -25,7 +25,7 @@ use crate::{
     coalesce,
     comics::comic_genres::models::{Genre, GenreMapping},
     comics::models::{Comic, ComicRating, ComicResponseBrief},
-    common::models::ImageResponse,
+    common::models::ImageMetadataResponse,
     schema::comics,
     schema::{comic_chapters, comic_genres, profile_images, sessions, users},
     sessions::{
@@ -149,18 +149,14 @@ pub async fn create_user(
         })
         .await?;
 
-    // TODO: handle error
-    let bytes = state.storage.get_bytes(&profile_image.path).await.unwrap();
-
     Ok(Json(UserResponse {
         id: user.id,
         displayname: user.displayname,
         username: user.username,
         email: user.email,
-        profile_image: ImageResponse {
+        profile_image: ImageMetadataResponse {
             path: profile_image.path,
             content_type: profile_image.content_type,
-            bytes,
         },
         role: user.role,
     }))
@@ -414,17 +410,14 @@ pub async fn get_user(
         .first(&mut db)
         .await?;
 
-    let bytes = state.storage.get_bytes(&profile_image.path).await.unwrap();
-
     let user = UserResponse {
         id: user.id,
         displayname: user.displayname,
         username: user.username,
         email: user.email,
-        profile_image: ImageResponse {
+        profile_image: ImageMetadataResponse {
             content_type: profile_image.content_type,
             path: profile_image.path,
-            bytes,
         },
         role: user.role,
     };

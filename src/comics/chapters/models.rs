@@ -1,6 +1,5 @@
 use std::fs;
 
-use bytes::Bytes;
 use chrono::DateTime;
 use derive_builder::Builder;
 use diesel::prelude::*;
@@ -11,8 +10,7 @@ use uuid::Uuid;
 
 use crate::{
     comics::models::Comic,
-    common::models::ImageResponse,
-    common::models::ImageResponseBrief,
+    common::models::ImageMetadataResponse,
     schema::{chapter_pages, chapter_ratings, comic_chapters},
     users::models::User,
     utils::average_rating,
@@ -42,7 +40,6 @@ impl Chapter {
         self,
         chapter_pages: Vec<ChapterPage>,
         chapter_ratings: Vec<ChapterRating>,
-        pages_bytes: Vec<Bytes>,
     ) -> ChapterResponse {
         ChapterResponse {
             id: self.id,
@@ -52,15 +49,13 @@ impl Chapter {
             created_at: self.created_at,
             pages: chapter_pages
                 .into_iter()
-                .zip(pages_bytes)
-                .map(|(page, bytes)| ChapterPageResponse {
+                .map(|page| ChapterPageResponse {
                     id: page.id,
                     number: page.number,
                     description: page.description,
-                    image: ImageResponse {
+                    image: ImageMetadataResponse {
                         content_type: page.content_type,
                         path: page.path,
-                        bytes,
                     },
                 })
                 .collect(),
@@ -83,7 +78,7 @@ impl Chapter {
                     id: page.id,
                     number: page.number,
                     description: page.description,
-                    image: ImageResponseBrief {
+                    image: ImageMetadataResponse {
                         content_type: page.content_type,
                         path: page.path,
                     },
@@ -215,7 +210,7 @@ pub struct ChapterPageResponse {
     pub id: Uuid,
     pub number: i32,
     pub description: Option<String>,
-    pub image: ImageResponse,
+    pub image: ImageMetadataResponse,
 }
 
 #[derive(Serialize, Deserialize, ToSchema, TS, Debug)]
@@ -224,7 +219,7 @@ pub struct ChapterPageResponseBrief {
     pub id: Uuid,
     pub number: i32,
     pub description: Option<String>,
-    pub image: ImageResponseBrief,
+    pub image: ImageMetadataResponse,
 }
 
 #[derive(garde::Validate, Serialize, Deserialize, ToSchema, TS, Debug)]
