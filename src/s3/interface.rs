@@ -12,6 +12,8 @@ use std::{
 };
 use sync_wrapper::SyncWrapper;
 
+use super::ImagesError;
+
 pin_project! {
     struct StreamBody<S> {
         #[pin]
@@ -88,8 +90,8 @@ impl Storage {
         Ok(response.body.map_err(Into::into).boxed())
     }
 
-    pub async fn get_bytes(&self, path: &str) -> super::Result<Bytes> {
-        let response: BoxStream<'static, super::Result<Bytes>> = self
+    pub async fn get_bytes(&self, path: &str) -> Result<Bytes, ImagesError> {
+        let response: BoxStream<'static, Result<Bytes, ImagesError>> = self
             .client
             .get_object()
             .bucket(&self.bucket_name)

@@ -91,6 +91,9 @@ async fn main() {
             email_username: config.email_username,
             email_password: config.email_password,
             email_smtp_server: config.email_smtp_server,
+            s3_referer: config
+                .s3_referer
+                .unwrap_or(String::from("http://localhost:5173/")),
         }),
     };
 

@@ -33,6 +33,15 @@ pub enum ImagesError {
 
     #[error("bad request")]
     BadRequest,
+
+    #[error(transparent)]
+    AWSGetError(#[from] aws_smithy_http::result::SdkError<aws_sdk_s3::error::GetObjectError>),
+
+    #[error(transparent)]
+    AWSPutError(#[from] aws_smithy_http::result::SdkError<aws_sdk_s3::error::PutObjectError>),
+
+    #[error(transparent)]
+    AWSStreamError(#[from] aws_smithy_http::byte_stream::error::Error),
 }
 
 impl IntoResponse for ImagesError {
@@ -49,6 +58,20 @@ impl IntoResponse for ImagesError {
             )
                 .into_response(),
             ImagesError::InternalServerError => (StatusCode::INTERNAL_SERVER_ERROR).into_response(),
+
+            ImagesError::AWSGetError(e) => match e {
+                aws_sdk_s3::types::SdkError::ServiceError(service_error) => {
+                    match service_error.err().kind {
+                        aws_sdk_s3::error::GetObjectErrorKind::NoSuchKey(_) => {
+                            (StatusCode::BAD_REQUEST).into_response()
+                        }
+                        _ => (StatusCode::INTERNAL_SERVER_ERROR).into_response(),
+                    }
+                }
+                _ => (StatusCode::INTERNAL_SERVER_ERROR).into_response(),
+            },
+            ImagesError::AWSPutError(_) => (StatusCode::INTERNAL_SERVER_ERROR).into_response(),
+            ImagesError::AWSStreamError(_) => (StatusCode::INTERNAL_SERVER_ERROR).into_response(),
         }
     }
 }
