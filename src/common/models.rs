@@ -5,7 +5,7 @@ use utoipa::ToSchema;
 
 #[derive(Queryable, Debug, Serialize, Deserialize, ToSchema, TS)]
 #[ts(export)]
-pub struct ImageResponse {
+pub struct ImageMetadataResponse {
     pub content_type: String,
     pub path: String,
 }

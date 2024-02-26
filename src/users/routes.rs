@@ -25,7 +25,7 @@ use crate::{
     coalesce,
     comics::comic_genres::models::{Genre, GenreMapping},
     comics::models::{Comic, ComicRating, ComicResponseBrief},
-    common::models::ImageResponse,
+    common::models::ImageMetadataResponse,
     schema::comics,
     schema::{comic_chapters, comic_genres, profile_images, sessions, users},
     sessions::{
@@ -154,7 +154,7 @@ pub async fn create_user(
         displayname: user.displayname,
         username: user.username,
         email: user.email,
-        profile_image: ImageResponse {
+        profile_image: ImageMetadataResponse {
             path: profile_image.path,
             content_type: profile_image.content_type,
         },
@@ -415,7 +415,7 @@ pub async fn get_user(
         displayname: user.displayname,
         username: user.username,
         email: user.email,
-        profile_image: ImageResponse {
+        profile_image: ImageMetadataResponse {
             content_type: profile_image.content_type,
             path: profile_image.path,
         },

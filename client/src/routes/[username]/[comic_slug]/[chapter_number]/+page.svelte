@@ -70,7 +70,7 @@
             {/if}
             <img
                 class="page-image"
-                src={`https://pub-26fa98a6ad0f4dd388ce1e8e1450be41.r2.dev/${page.image.path}`}
+                src={`http://localhost:6060/api/v1/images/${page.image.path}`}
                 alt="page"
             />
         {/each}
@@ -120,6 +120,7 @@
     }
     .page-image {
         width: 100%;
+        pointer-events: none;
     }
     .back-button {
         background: none;

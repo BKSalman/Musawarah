@@ -30,7 +30,7 @@ use crate::{
         models::{ChapterPage, ChapterRating, NewChapterRating, UpdateChapterPage},
         ChaptersParams,
     },
-    common::models::ImageResponse,
+    common::models::ImageMetadataResponse,
     s3::Upload,
     schema::{chapter_pages, chapter_ratings, comic_chapters, comics, users},
     users::models::UserRole,
@@ -252,8 +252,9 @@ pub async fn create_chapter_page(
         ChaptersError::BadRequest
     })?;
 
-    let new_chapter_page = db
-        .transaction::<_, ChaptersError, _>(|transaction| {
+    let new_chapter_page = {
+        let state = state.clone();
+        db.transaction::<_, ChaptersError, _>(|transaction| {
             async move {
                 // save chapter page to db
                 let chapter_page = ChapterPage {
@@ -299,13 +300,14 @@ pub async fn create_chapter_page(
             .scope_boxed()
         })
         // TODO: error handling
-        .await?;
+        .await?
+    };
 
     let chapter_page = ChapterPageResponse {
         id: new_chapter_page.id,
         number: new_chapter_page.number,
         description: new_chapter_page.description,
-        image: ImageResponse {
+        image: ImageMetadataResponse {
             path: new_chapter_page.path,
             content_type: new_chapter_page.content_type,
         },

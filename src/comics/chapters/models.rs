@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use crate::{
     comics::models::Comic,
-    common::models::ImageResponse,
+    common::models::ImageMetadataResponse,
     schema::{chapter_pages, chapter_ratings, comic_chapters},
     users::models::User,
     utils::average_rating,
@@ -53,7 +53,7 @@ impl Chapter {
                     id: page.id,
                     number: page.number,
                     description: page.description,
-                    image: ImageResponse {
+                    image: ImageMetadataResponse {
                         content_type: page.content_type,
                         path: page.path,
                     },
@@ -74,11 +74,11 @@ impl Chapter {
             created_at: self.created_at,
             pages: chapter_pages
                 .into_iter()
-                .map(|page| ChapterPageResponse {
+                .map(|page| ChapterPageResponseBrief {
                     id: page.id,
                     number: page.number,
                     description: page.description,
-                    image: ImageResponse {
+                    image: ImageMetadataResponse {
                         content_type: page.content_type,
                         path: page.path,
                     },
@@ -175,7 +175,7 @@ pub struct ChapterResponseBrief {
     pub title: String,
     pub number: i32,
     pub description: Option<String>,
-    pub pages: Vec<ChapterPageResponse>,
+    pub pages: Vec<ChapterPageResponseBrief>,
     pub created_at: DateTime<chrono::Utc>,
 }
 
@@ -210,7 +210,16 @@ pub struct ChapterPageResponse {
     pub id: Uuid,
     pub number: i32,
     pub description: Option<String>,
-    pub image: ImageResponse,
+    pub image: ImageMetadataResponse,
+}
+
+#[derive(Serialize, Deserialize, ToSchema, TS, Debug)]
+#[ts(export)]
+pub struct ChapterPageResponseBrief {
+    pub id: Uuid,
+    pub number: i32,
+    pub description: Option<String>,
+    pub image: ImageMetadataResponse,
 }
 
 #[derive(garde::Validate, Serialize, Deserialize, ToSchema, TS, Debug)]

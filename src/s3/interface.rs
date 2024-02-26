@@ -2,7 +2,7 @@ use aws_sdk_s3::{types::ByteStream, Client, Config};
 use aws_smithy_http::body::{BoxBody, SdkBody};
 use axum::http::HeaderMap;
 use axum::BoxError;
-use bytes::Bytes;
+use bytes::{BufMut, Bytes, BytesMut};
 use futures_util::{stream::BoxStream, Stream, StreamExt, TryStreamExt};
 use http_body::Body;
 use pin_project_lite::pin_project;
@@ -11,6 +11,8 @@ use std::{
     task::{self, Poll},
 };
 use sync_wrapper::SyncWrapper;
+
+use super::ImagesError;
 
 pin_project! {
     struct StreamBody<S> {
@@ -73,7 +75,10 @@ impl Storage {
         Ok(())
     }
 
-    pub async fn get(&self, path: &str) -> super::Result<BoxStream<'static, super::Result<Bytes>>> {
+    pub async fn get_stream(
+        &self,
+        path: &str,
+    ) -> super::Result<BoxStream<'static, super::Result<Bytes>>> {
         let response = self
             .client
             .get_object()
@@ -83,6 +88,27 @@ impl Storage {
             .await?;
 
         Ok(response.body.map_err(Into::into).boxed())
+    }
+
+    pub async fn get_bytes(&self, path: &str) -> Result<Bytes, ImagesError> {
+        let response: BoxStream<'static, Result<Bytes, ImagesError>> = self
+            .client
+            .get_object()
+            .bucket(&self.bucket_name)
+            .key(path)
+            .send()
+            .await?
+            .body
+            .map_err(Into::into)
+            .boxed();
+
+        Ok(response
+            .try_fold(BytesMut::new(), |mut acc, chunk| {
+                acc.put(chunk);
+                futures_util::future::ok(acc)
+            })
+            .await?
+            .freeze())
     }
 
     pub async fn put(

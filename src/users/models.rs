@@ -15,7 +15,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
-    common::models::ImageResponse,
+    common::models::ImageMetadataResponse,
     schema::{profile_images, users},
 };
 #[derive(
@@ -139,7 +139,7 @@ pub struct UserResponse {
     pub displayname: String,
     pub username: String,
     pub email: String,
-    pub profile_image: ImageResponse,
+    pub profile_image: ImageMetadataResponse,
     pub role: UserRole,
 }
 

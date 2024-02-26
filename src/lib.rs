@@ -69,6 +69,7 @@ pub struct Config {
     pub email_username: String,
     pub email_password: String,
     pub email_smtp_server: String,
+    pub s3_referer: Option<String>,
 }
 
 impl Config {
@@ -86,6 +87,7 @@ pub struct InnerAppState {
     pub email_username: String,
     pub email_password: String,
     pub email_smtp_server: String,
+    pub s3_referer: String,
 }
 
 #[derive(Clone, FromRef)]
@@ -127,9 +129,10 @@ pub struct AppState {
         comics::comic_comments::routes::get_comments,
         comics::comic_comments::routes::create_comment,
         comics::comic_comments::routes::delete_comment,
+        s3::routes::get_image,
     ),
     components(
-        schemas(common::models::ImageResponse),
+        schemas(common::models::ImageMetadataResponse),
         schemas(comics::models::CreateComic),
         schemas(comics::models::UpdateComic),
         schemas(comics::models::ComicResponse),
@@ -164,6 +167,7 @@ pub struct AppState {
         (name = "Comics API"),
         (name = "Comic Genres API"),
         (name = "Comic Comments API"),
+        (name = "Images API"),
     )
 )]
 pub struct ApiDoc;
